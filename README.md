@@ -115,7 +115,7 @@ prototipo.html                Protótipo de UI original (referência de design)
 | `profiles` | Nome e cor de cada pessoa. Criado por trigger no cadastro. |
 | `lists` | A lista. `owner_id` é quem criou. |
 | `list_members` | Quem participa de qual lista, e com que papel. |
-| `items` | O item. `added_by` e `checked_by` alimentam a linha de atividade. |
+| `items` | O item. `added_by`, `checked_by` e `updated_by` alimentam a linha de atividade. |
 | `list_invites` | Token do link de convite. |
 
 ### Duas decisões que não são óbvias
@@ -127,6 +127,8 @@ Postgres entrar em recursão infinita. A função quebra o ciclo.
 **`items` tem `REPLICA IDENTITY FULL`.** Sem isso, o payload de `DELETE`
 do Realtime traz só a chave primária, e o filtro `list_id=eq.<id>` nunca
 casaria — exclusões feitas por outra pessoa nunca chegariam na sua tela.
+É também o que faz o `UPDATE` trazer a linha antiga, permitindo comparar
+antes/depois e dizer *o que* mudou em vez de adivinhar pelo estado final.
 
 ## Decisões de UX
 
@@ -138,9 +140,14 @@ casaria — exclusões feitas por outra pessoa nunca chegariam na sua tela.
   de *Desfazer*. Confirmação pune quem tem certeza; desfazer salva quem errou.
 - **O comprado sai do caminho.** "No carrinho" nasce fechado — item concluído
   virou histórico.
+- **Quantidade se edita no lugar.** Tocar no número troca o chip por um
+  stepper na mesma posição; o item não abre tela nem diálogo. A escrita é
+  adiada 450 ms, então quatro toques em "+" viram um `UPDATE`, e quem está
+  do outro lado vê a quantidade final em vez de uma contagem.
 
 ## Próximos passos
 
+- Editar o nome do item (a infra de `updated_by` e diff já cobre)
 - Agrupar por categoria com detecção pelo nome do item
 - Fila offline (hoje uma ação sem rede falha e desfaz)
 - Sugestões a partir do histórico de compras

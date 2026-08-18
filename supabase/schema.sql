@@ -270,3 +270,11 @@ exception
   when duplicate_object then null;
 end;
 $$;
+
+-- ── Quem mexeu por último ──────────────────────────────────────
+-- `checked_by` só responde "quem marcou". Para uma alteração de
+-- quantidade o autor é outro, e a linha de atividade precisa saber.
+-- Separado do bloco de criação para valer também em bancos já criados.
+
+alter table public.items
+  add column if not exists updated_by uuid references public.profiles on delete set null;

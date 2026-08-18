@@ -17,6 +17,27 @@ type Toast = {
 };
 
 const REMOTE_FLASH_MS = 2100;
+const QTY_COMMIT_MS = 450;
+
+/**
+ * O que mudou, em português. Como `items` está com REPLICA IDENTITY FULL,
+ * o payload de UPDATE traz a linha antiga inteira — dá para comparar em vez
+ * de adivinhar pelo estado final. Retorna null quando nada visível mudou.
+ */
+function describeChange(
+  event: string,
+  fresh: Item,
+  previous?: Item,
+): string | null {
+  if (event === "INSERT") return `adicionou ${fresh.name}`;
+  if (!previous) return `mexeu em ${fresh.name}`;
+  if (previous.done !== fresh.done)
+    return `${fresh.done ? "marcou" : "desmarcou"} ${fresh.name}`;
+  if (previous.qty !== fresh.qty)
+    return `mudou ${fresh.name} para ${fresh.qty} un`;
+  if (previous.name !== fresh.name) return `renomeou para ${fresh.name}`;
+  return null;
+}
 
 export default function ListaView({
   list,
@@ -47,6 +68,8 @@ export default function ListaView({
 
   const toastSeq = useRef(0);
   const flashTimers = useRef<Map<string, number>>(new Map());
+  const qtyTimers = useRef<Map<string, number>>(new Map());
+  const qtyBaseline = useRef<Map<string, number>>(new Map());
 
   const profiles = useMemo(() => {
     const map: Record<string, Profile> = {};
@@ -130,7 +153,9 @@ export default function ListaView({
           }
 
           const fresh = payload.new as Item;
-          const actorId = payload.eventType === "INSERT" ? fresh.added_by : fresh.checked_by;
+          const previous = payload.old as Item | undefined;
+          const actorId =
+            payload.eventType === "INSERT" ? fresh.added_by : fresh.updated_by;
           const mine = actorId === me.id;
 
           setItems((list) => {
@@ -144,22 +169,17 @@ export default function ListaView({
           // A minha própria ação já apareceu na tela na hora do toque.
           if (mine) return;
 
+          const phrase = describeChange(payload.eventType, fresh, previous);
+          if (!phrase) return;
+
           void ensureProfile(actorId);
           const actor = actorId ? profilesRef.current[actorId] : undefined;
           const name = actor?.display_name ?? "Alguém";
           const color = actor?.color ?? "violet";
 
           flashRemote(fresh.id, color);
-
-          const verb =
-            payload.eventType === "INSERT"
-              ? "adicionou"
-              : fresh.done
-                ? "marcou"
-                : "desmarcou";
-
-          setActivity(`${name} ${verb} ${fresh.name}`);
-          pushToast({ text: `${name} ${verb} ${fresh.name}`, actor });
+          setActivity(`${name} ${phrase}`);
+          pushToast({ text: `${name} ${phrase}`, actor });
         },
       )
       .subscribe();
@@ -195,10 +215,13 @@ export default function ListaView({
   }, [supabase, list.id, me.id]);
 
   useEffect(() => {
-    const timers = flashTimers.current;
+    const flashes = flashTimers.current;
+    const qtys = qtyTimers.current;
     return () => {
-      timers.forEach((t) => window.clearTimeout(t));
-      timers.clear();
+      flashes.forEach((t) => window.clearTimeout(t));
+      flashes.clear();
+      qtys.forEach((t) => window.clearTimeout(t));
+      qtys.clear();
     };
   }, []);
 
@@ -227,6 +250,7 @@ export default function ListaView({
       done: false,
       added_by: me.id,
       checked_by: null,
+      updated_by: null,
       created_at: now,
       updated_at: now,
     };
@@ -270,7 +294,7 @@ export default function ListaView({
 
     const { error: err } = await supabase
       .from("items")
-      .update({ done: next, checked_by: me.id })
+      .update({ done: next, checked_by: me.id, updated_by: me.id })
       .eq("id", item.id);
 
     markPending(item.id, false);
@@ -281,6 +305,46 @@ export default function ListaView({
       );
       setError("Não consegui salvar. Tente de novo.");
     }
+  }
+
+  /**
+   * A tela reage a cada toque; o banco recebe uma escrita só no fim da
+   * sequência. Quem toca "+" quatro vezes gera um UPDATE, não quatro —
+   * e o outro lado vê a quantidade final, sem contagem regressiva.
+   */
+  function changeQty(item: Item, next: number) {
+    const value = Math.max(1, Math.min(999, next));
+    if (value === item.qty) return;
+
+    if (!qtyBaseline.current.has(item.id)) {
+      qtyBaseline.current.set(item.id, item.qty);
+    }
+
+    setItems((l) => l.map((i) => (i.id === item.id ? { ...i, qty: value } : i)));
+    setError("");
+
+    const running = qtyTimers.current.get(item.id);
+    if (running) window.clearTimeout(running);
+
+    const timer = window.setTimeout(async () => {
+      qtyTimers.current.delete(item.id);
+      const baseline = qtyBaseline.current.get(item.id) ?? item.qty;
+      qtyBaseline.current.delete(item.id);
+
+      const { error: err } = await supabase
+        .from("items")
+        .update({ qty: value, updated_by: me.id })
+        .eq("id", item.id);
+
+      if (err) {
+        setItems((l) =>
+          l.map((i) => (i.id === item.id ? { ...i, qty: baseline } : i)),
+        );
+        setError("Não consegui salvar a quantidade.");
+      }
+    }, QTY_COMMIT_MS);
+
+    qtyTimers.current.set(item.id, timer);
   }
 
   async function deleteItem(item: Item) {
@@ -413,6 +477,7 @@ export default function ListaView({
                 isPending={pending.has(item.id)}
                 onToggle={() => toggleItem(item)}
                 onDelete={() => deleteItem(item)}
+                onQty={(next) => changeQty(item, next)}
               />
             ))}
           </ul>
@@ -439,6 +504,7 @@ export default function ListaView({
                     isPending={pending.has(item.id)}
                     onToggle={() => toggleItem(item)}
                     onDelete={() => deleteItem(item)}
+                    onQty={(next) => changeQty(item, next)}
                   />
                 ))}
               </ul>

@@ -1008,3 +1008,97 @@ input {
   background: color-mix(in srgb, var(--danger) 12%, var(--surface));
   color: var(--danger);
 }
+
+/* ═══════════════ QUANTIDADE EDITÁVEL ═══════════════ */
+/* O chip é o alvo de toque. Em quantidade 1 ele recua para não competir
+   com o nome do item, mas continua presente — sem ele não há por onde
+   aumentar. Tocar troca o chip por um stepper no mesmo lugar. */
+
+.qty {
+  border: 0;
+  transition: opacity 0.3s var(--ease), background 0.2s var(--ease),
+    color 0.2s var(--ease);
+}
+
+.qty-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+}
+.qty-chip:hover {
+  background: var(--mint-soft);
+  color: var(--mint-ink);
+}
+.qty-chip.is-single {
+  background: transparent;
+  color: var(--ink-3);
+  box-shadow: inset 0 0 0 1.5px var(--line);
+}
+.qty-chip.is-single:hover {
+  background: var(--mint-soft);
+  color: var(--mint-ink);
+  box-shadow: inset 0 0 0 1.5px var(--mint);
+}
+.qty-unit {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.qty-editing {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-sunk);
+  box-shadow: inset 0 0 0 1.5px var(--mint);
+  animation: qtyOpen 0.22s var(--ease-out);
+}
+
+@keyframes qtyOpen {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.qty-editing button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--mint-ink);
+  transition: background 0.16s var(--ease), opacity 0.16s var(--ease);
+}
+.qty-editing button:hover:not(:disabled) {
+  background: var(--surface);
+}
+.qty-editing button:active:not(:disabled) {
+  transform: scale(0.88);
+}
+.qty-editing button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.qty-editing output {
+  min-width: 26px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* Item riscado: a quantidade vira leitura, não controle. */
+.item.is-done .qty-chip {
+  pointer-events: none;
+}

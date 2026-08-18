@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Item, PersonColor, Profile } from "@/lib/types";
 
 const GLOW: Record<PersonColor, string> = {
@@ -21,6 +21,7 @@ export default function ItemRow({
   isPending,
   onToggle,
   onDelete,
+  onQty,
 }: {
   item: Item;
   actor?: Profile;
@@ -29,13 +30,27 @@ export default function ItemRow({
   isPending: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  onQty: (next: number) => void;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const qtyRef = useRef<HTMLDivElement>(null);
   const drag = useRef({ startX: 0, dx: 0, active: false });
   const [dragging, setDragging] = useState(false);
+  const [editingQty, setEditingQty] = useState(false);
+
+  // Fecha o seletor ao tocar em qualquer outro lugar — sem botão de "pronto".
+  useEffect(() => {
+    if (!editingQty) return;
+    const close = (e: PointerEvent) => {
+      if (!qtyRef.current?.contains(e.target as Node)) setEditingQty(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [editingQty]);
 
   function onPointerDown(e: React.PointerEvent) {
-    if ((e.target as HTMLElement).closest(".check")) return;
+    // O check e o seletor de quantidade não podem virar arrasto.
+    if ((e.target as HTMLElement).closest(".check, .qty")) return;
     drag.current = { startX: e.clientX, dx: 0, active: true };
     setDragging(true);
     cardRef.current?.setPointerCapture(e.pointerId);
@@ -117,7 +132,36 @@ export default function ItemRow({
           </span>
         </div>
 
-        {item.qty > 1 && <span className="qty">{item.qty} un</span>}
+        {editingQty ? (
+          <div className="qty qty-editing" ref={qtyRef}>
+            <button
+              type="button"
+              aria-label={`Diminuir quantidade de ${item.name}`}
+              disabled={item.qty <= 1}
+              onClick={() => onQty(item.qty - 1)}
+            >
+              −
+            </button>
+            <output aria-live="polite">{item.qty}</output>
+            <button
+              type="button"
+              aria-label={`Aumentar quantidade de ${item.name}`}
+              disabled={item.qty >= 999}
+              onClick={() => onQty(item.qty + 1)}
+            >
+              +
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className={`qty qty-chip${item.qty === 1 ? " is-single" : ""}`}
+            aria-label={`Quantidade de ${item.name}: ${item.qty}. Tocar para alterar`}
+            onClick={() => setEditingQty(true)}
+          >
+            {item.qty} <span className="qty-unit">un</span>
+          </button>
+        )}
       </div>
     </li>
   );

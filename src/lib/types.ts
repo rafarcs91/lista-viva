@@ -14,6 +14,7 @@ export type Item = {
   done: boolean;
   added_by: string | null;
   checked_by: string | null;
+  updated_by: string | null;
   created_at: string;
   updated_at: string;
 };
