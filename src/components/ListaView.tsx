@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
@@ -8,6 +9,7 @@ import type { Item, Member, PersonColor, Profile } from "@/lib/types";
 import Avatar from "./Avatar";
 import ItemRow from "./ItemRow";
 import ShareSheet from "./ShareSheet";
+import ListSettingsSheet from "./ListSettingsSheet";
 
 type Toast = {
   id: number;
@@ -50,6 +52,7 @@ export default function ListaView({
   initialMembers: Member[];
   me: Profile;
 }) {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
   const [items, setItems] = useState<Item[]>(initialItems);
@@ -61,6 +64,8 @@ export default function ListaView({
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [showDone, setShowDone] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [title, setTitle] = useState(list.title);
   const [error, setError] = useState("");
 
   const [draft, setDraft] = useState("");
@@ -188,6 +193,37 @@ export default function ListaView({
       void supabase.removeChannel(channel);
     };
   }, [supabase, list.id, me.id, ensureProfile, flashRemote, pushToast]);
+
+  /* ─────────── realtime: a lista em si ─────────── */
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`lista:${list.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "lists",
+          filter: `id=eq.${list.id}`,
+        },
+        (payload) => {
+          // Apagada por quem é dona: ninguém fica editando o que não existe.
+          if (payload.eventType === "DELETE") {
+            router.push("/listas");
+            router.refresh();
+            return;
+          }
+          const fresh = payload.new as { title?: string };
+          if (fresh.title) setTitle(fresh.title);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [supabase, list.id, router]);
 
   /* ─────────── realtime: quem está com a lista aberta ─────────── */
 
@@ -408,9 +444,26 @@ export default function ListaView({
             </svg>
             Listas
           </Link>
+
+          <button
+            className="icon-btn"
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Ajustes da lista"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <circle cx="5" cy="12" r="1.9" />
+              <circle cx="12" cy="12" r="1.9" />
+              <circle cx="19" cy="12" r="1.9" />
+            </svg>
+          </button>
         </div>
 
-        <h1 className="title">{list.title}</h1>
+        <h1 className="title">{title}</h1>
 
         <div className="presence">
           <div className="avatars">
@@ -582,6 +635,15 @@ export default function ListaView({
           meId={me.id}
           online={online}
           onClose={() => setSharing(false)}
+        />
+      )}
+
+      {settingsOpen && (
+        <ListSettingsSheet
+          listId={list.id}
+          title={title}
+          isOwner={list.owner_id === me.id}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
     </div>

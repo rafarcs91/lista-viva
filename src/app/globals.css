@@ -1102,3 +1102,124 @@ input {
 .item.is-done .qty-chip {
   pointer-events: none;
 }
+
+/* ═══════════════ BOTÃO DE ÍCONE ═══════════════ */
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+  flex: none;
+  transition: color 0.2s var(--ease), border-color 0.2s var(--ease),
+    transform 0.2s var(--ease);
+}
+.icon-btn:hover {
+  color: var(--mint-ink);
+  border-color: var(--mint);
+  transform: scale(1.06);
+}
+.icon-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* ═══════════════ AÇÃO DESTRUTIVA ═══════════════ */
+/* O único botão do app que pede confirmação. Ele se arma no primeiro
+   toque e desarma sozinho — apagar uma lista afeta outras pessoas e
+   não tem Desfazer possível. */
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  font-size: 15.5px;
+  font-weight: 650;
+  padding: 14px 20px;
+  border-radius: var(--r-pill);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--danger) 30%, transparent);
+  transition: background 0.22s var(--ease), color 0.22s var(--ease),
+    box-shadow 0.22s var(--ease), transform 0.2s var(--ease);
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+}
+.btn-danger.is-armed {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: inset 0 0 0 1.5px var(--danger);
+  animation: armed 0.3s var(--ease-out);
+}
+.btn-danger:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn-danger:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+@keyframes armed {
+  from {
+    transform: scale(0.97);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* ═══════════════ ESQUELETOS ═══════════════ */
+.skeleton {
+  background: var(--surface-sunk);
+  border-radius: var(--r-card);
+  animation: pulse 1.4s var(--ease) infinite;
+}
+.skeleton-card {
+  height: 104px;
+  border-radius: var(--r-lg);
+}
+.skeleton-item {
+  height: 62px;
+}
+.skeleton-title {
+  height: 30px;
+  width: 62%;
+  border-radius: 9px;
+}
+.skeleton-line {
+  height: 13px;
+  width: 42%;
+  border-radius: 7px;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ═══════════════ TELA DE RECADO ═══════════════ */
+/* Erro, 404 e convite inválido compartilham a mesma moldura. */
+.message-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 20px;
+  padding: 0 24px 60px;
+}
+.message-screen p {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}

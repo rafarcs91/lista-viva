@@ -54,6 +54,14 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+/**
+ * Metadados e estáticos ficam fora do proxy. Sem `icon`, `apple-icon` e
+ * `manifest.webmanifest` nesta lista eles caem no redirecionamento para
+ * /entrar — o manifest nunca carrega e o app deixa de ser instalável.
+ * Eles não têm extensão, então a regra de sufixo abaixo não os cobre.
+ */
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|webp)$).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|webp|ico)$).*)",
+  ],
 };

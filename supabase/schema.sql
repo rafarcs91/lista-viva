@@ -278,3 +278,17 @@ $$;
 
 alter table public.items
   add column if not exists updated_by uuid references public.profiles on delete set null;
+
+-- A lista em si também é tempo real: renomear aparece na hora para quem
+-- está com ela aberta, e apagar tira essas pessoas da tela em vez de
+-- deixá-las editando algo que não existe mais.
+
+alter table public.lists replica identity full;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.lists;
+exception
+  when duplicate_object then null;
+end;
+$$;

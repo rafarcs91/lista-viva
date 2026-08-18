@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { ListSummary, Profile } from "@/lib/types";
 import Avatar from "./Avatar";
@@ -12,7 +12,6 @@ export default function Home({ lists, me }: { lists: ListSummary[]; me: Profile 
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
   const [error, setError] = useState("");
-  const [isPending, startTransition] = useTransition();
 
   async function createList(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +36,9 @@ export default function Home({ lists, me }: { lists: ListSummary[]; me: Profile 
     }
 
     setTitle("");
+    // Sem o refresh, voltar para cá mostraria a lista de antes:
+    // esta tela é um Server Component e o App Router serve o cache.
+    router.refresh();
     router.push(`/listas/${data.id}`);
   }
 
@@ -125,9 +127,8 @@ export default function Home({ lists, me }: { lists: ListSummary[]; me: Profile 
         <button
           className="send"
           type="submit"
-          disabled={!title.trim() || creating || isPending}
+          disabled={!title.trim() || creating}
           aria-label="Criar lista"
-          onClick={() => startTransition(() => {})}
         >
           <svg viewBox="0 0 24 24">
             <path d="M12 5v14M5 12h14" />
