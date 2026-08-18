@@ -505,9 +505,63 @@
     background: var(--surface-sunk);
     padding: 3px 9px;
     border-radius: var(--r-pill);
-    transition: opacity .3s var(--ease);
+    border: 0;
+    transition: opacity .3s var(--ease), background .2s var(--ease), color .2s var(--ease);
   }
   .item.is-done .qty { opacity: .45; }
+
+  /* A quantidade é um controle, não um rótulo. O chip existe mesmo em
+     "1 un" — sem ele não haveria por onde aumentar — mas recua para não
+     competir com o nome do item. */
+  .qty-slot { flex: none; display: flex; }
+
+  .qty-chip { display: inline-flex; align-items: baseline; gap: 3px; }
+  .qty-chip:hover { background: var(--mint-soft); color: var(--mint-ink); }
+  .qty-chip.is-single {
+    background: transparent;
+    color: var(--ink-3);
+    box-shadow: inset 0 0 0 1.5px var(--line);
+  }
+  .qty-chip.is-single:hover {
+    background: var(--mint-soft);
+    color: var(--mint-ink);
+    box-shadow: inset 0 0 0 1.5px var(--mint);
+  }
+  .qty-unit { font-size: 11px; font-weight: 600; opacity: .7; }
+  .item.is-done .qty-chip { pointer-events: none; }
+
+  .qty-editing {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    background: var(--surface-sunk);
+    box-shadow: inset 0 0 0 1.5px var(--mint);
+    animation: qtyOpen .22s var(--ease-out);
+  }
+  @keyframes qtyOpen {
+    from { opacity: 0; transform: scale(.86); }
+    to { opacity: 1; transform: none; }
+  }
+  .qty-editing button {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 17px; font-weight: 600; line-height: 1;
+    color: var(--mint-ink);
+    transition: background .16s var(--ease), opacity .16s var(--ease);
+  }
+  .qty-editing button:hover:not(:disabled) { background: var(--surface); }
+  .qty-editing button:active:not(:disabled) { transform: scale(.88); }
+  .qty-editing button:disabled { opacity: .3; cursor: default; }
+  .qty-editing output {
+    min-width: 26px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
 
   .empty {
     text-align: center;
@@ -933,6 +987,11 @@
     </div>
 
     <div class="note-block">
+      <h4>A quantidade se edita no lugar</h4>
+      <p>Tocar no número troca o chip por um <strong>stepper na mesma posição</strong> — o item não abre tela nem diálogo, e a lista não salta. O chip existe mesmo quando a quantidade é 1, senão não haveria por onde aumentar; nesse estado ele fica discreto para não competir com o nome do item. No app real a escrita é adiada em 450 ms, então quatro toques em "+" viram <em>um</em> salvamento, e quem está do outro lado vê a quantidade final em vez de uma contagem subindo.</p>
+    </div>
+
+    <div class="note-block">
       <h4>Nada trava esperando o servidor</h4>
       <p>Toda ação é <strong>otimista</strong>: a interface muda na hora e o Supabase confirma depois. Se a rede cair, a mudança fica na fila e sobe quando voltar. Um app de supermercado tem que funcionar no subsolo com 1 barra de sinal.</p>
     </div>
@@ -1154,7 +1213,7 @@
           <span class="item-name"></span>
           <span class="item-meta"></span>
         </div>
-        <span class="qty">${item.qty} un</span>
+        <div class="qty-slot"></div>
       </div>`;
 
     li.querySelector(".item-name").textContent = item.name;
@@ -1164,9 +1223,81 @@
     li.querySelector(".check").setAttribute("aria-label", `Marcar ${item.name}`);
     li.querySelector(".check").addEventListener("click", () => toggleItem(item.id, "ana", false));
 
+    renderQty(li, item);
     enableSwipe(li, item);
     return li;
   }
+
+  /* ─────────── QUANTIDADE ─────────── */
+
+  function renderQty(li, item) {
+    const slot = li.querySelector(".qty-slot");
+    slot.textContent = "";
+
+    if (li.dataset.editingQty === "true") {
+      const box = document.createElement("div");
+      box.className = "qty qty-editing";
+
+      const minus = document.createElement("button");
+      minus.textContent = "−";
+      minus.setAttribute("aria-label", `Diminuir quantidade de ${item.name}`);
+      minus.disabled = item.qty <= 1;
+      minus.addEventListener("click", () => setQty(li, item, item.qty - 1));
+
+      const out = document.createElement("output");
+      out.setAttribute("aria-live", "polite");
+      out.textContent = item.qty;
+
+      const plus = document.createElement("button");
+      plus.textContent = "+";
+      plus.setAttribute("aria-label", `Aumentar quantidade de ${item.name}`);
+      plus.disabled = item.qty >= 99;
+      plus.addEventListener("click", () => setQty(li, item, item.qty + 1));
+
+      box.append(minus, out, plus);
+      slot.appendChild(box);
+      return;
+    }
+
+    const chip = document.createElement("button");
+    chip.className = "qty qty-chip" + (item.qty === 1 ? " is-single" : "");
+    chip.setAttribute(
+      "aria-label",
+      `Quantidade de ${item.name}: ${item.qty}. Tocar para alterar`
+    );
+    chip.append(String(item.qty), " ");
+    const unit = document.createElement("span");
+    unit.className = "qty-unit";
+    unit.textContent = "un";
+    chip.appendChild(unit);
+
+    chip.addEventListener("click", () => {
+      closeAllQty();
+      li.dataset.editingQty = "true";
+      renderQty(li, item);
+    });
+    slot.appendChild(chip);
+  }
+
+  function setQty(li, item, next) {
+    const value = Math.max(1, Math.min(99, next));
+    if (value === item.qty) return;
+    item.qty = value;
+    renderQty(li, item);
+  }
+
+  function closeAllQty() {
+    document.querySelectorAll('.item[data-editing-qty="true"]').forEach((el) => {
+      el.dataset.editingQty = "false";
+      const item = current.items.find((i) => String(i.id) === el.dataset.id);
+      if (item) renderQty(el, item);
+    });
+  }
+
+  // Fecha o seletor ao tocar em qualquer outro lugar — sem botão de "pronto".
+  document.addEventListener("pointerdown", (e) => {
+    if (!e.target.closest(".qty")) closeAllQty();
+  });
 
   function renderItems() {
     pendingEl.textContent = "";
@@ -1273,7 +1404,8 @@
     let startX = 0, dx = 0, active = false;
 
     card.addEventListener("pointerdown", (e) => {
-      if (e.target.closest(".check")) return;
+      // O check e o seletor de quantidade não podem virar arrasto.
+      if (e.target.closest(".check, .qty")) return;
       active = true; startX = e.clientX; dx = 0;
       card.classList.add("is-dragging");
       card.setPointerCapture(e.pointerId);
@@ -1359,12 +1491,27 @@
     simTimers = [];
   }
 
+  function remoteQty(id, value, who) {
+    const item = current.items.find((i) => i.id === id);
+    const li = document.querySelector(`.item[data-id="${id}"]`);
+    if (!item || !li) return;
+
+    item.qty = value;
+    li.dataset.editingQty = "false";
+    renderQty(li, item);
+
+    flashRemote(li);
+    setLive(`<b>${PEOPLE[who].name}</b> mudou ${item.name} para ${value} un`);
+    toast(`mudou ${item.name} para ${value} un`, who);
+  }
+
   function runSim() {
     clearSim();
     const open = current.items.filter((i) => !i.done);
     if (open.length) simTimers.push(setTimeout(() => toggleItem(open[0].id, "leo", true), 200));
-    simTimers.push(setTimeout(() => addItem("Guardanapo", 2, "leo", true), 3200));
-    if (open.length > 2) simTimers.push(setTimeout(() => toggleItem(open[2].id, "leo", true), 6400));
+    if (open.length > 1) simTimers.push(setTimeout(() => remoteQty(open[1].id, 3, "leo"), 3200));
+    simTimers.push(setTimeout(() => addItem("Guardanapo", 2, "leo", true), 6200));
+    if (open.length > 2) simTimers.push(setTimeout(() => toggleItem(open[2].id, "leo", true), 9200));
   }
 
   /* ─────────── SHEETS ─────────── */
