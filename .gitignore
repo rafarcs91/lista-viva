@@ -45,3 +45,4 @@ next-env.d.ts
 
 # Script de verificacao descartavel
 verificar.mjs
+testar-email.mjs

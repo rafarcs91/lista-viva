@@ -82,6 +82,41 @@ quem mexeu e a linha de atividade no topo — sem recarregar.
 
 ---
 
+### 5. Servidor de e-mail (Resend)
+
+Sem SMTP próprio, o Supabase limita o envio a **2 e-mails por hora** — o
+terceiro login da hora simplesmente não recebe o link. Para qualquer uso
+real isso precisa ser resolvido.
+
+1. Crie a conta em [resend.com](https://resend.com).
+2. **API Keys** → **Create API Key**, permissão *Sending access*. Copie a
+   chave (`re_...`), ela só aparece uma vez.
+3. No Supabase: **Authentication** → **Emails** → **SMTP Settings** →
+   ligue **Enable Custom SMTP** e preencha:
+
+   | Campo | Valor |
+   |---|---|
+   | Host | `smtp.resend.com` |
+   | Port | `465` |
+   | Username | `resend` |
+   | Password | a chave `re_...` |
+   | Sender email | `onboarding@resend.dev` |
+   | Sender name | `Lista Viva` |
+
+4. **Authentication** → **Rate Limits** → suba *Rate limit for sending
+   emails* de 2 para algo como 100 por hora. O limite antigo continua
+   valendo até você mudar isto, mesmo com o SMTP configurado.
+
+**Enquanto não houver domínio próprio:** o remetente `onboarding@resend.dev`
+só entrega no e-mail dono da conta Resend. Endereços de terceiros são aceitos
+pela API mas não chegam. Para testar mais de uma pessoa, use os apelidos do
+Gmail (`voce+ana@gmail.com`, `voce+leo@gmail.com`) — para o Supabase são
+contas distintas, e tudo cai na mesma caixa de entrada.
+
+Para publicar de verdade, registre um domínio, verifique-o no Resend
+(**Domains** → adicionar → 3 registros DNS) e troque o *Sender email* para
+algo como `ola@seudominio.com.br`.
+
 ## Como está organizado
 
 ```
