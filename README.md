@@ -130,6 +130,21 @@ casaria — exclusões feitas por outra pessoa nunca chegariam na sua tela.
 É também o que faz o `UPDATE` trazer a linha antiga, permitindo comparar
 antes/depois e dizer *o que* mudou em vez de adivinhar pelo estado final.
 
+## Verificado contra o banco real
+
+21 checagens automatizadas passaram contra um projeto Supabase de verdade,
+cobrindo RLS entre usuários distintos, realtime, convite e cascade. O que
+elas mostraram de não-óbvio:
+
+- O status `SUBSCRIBED` do Realtime chega **antes** de a replicação estar
+  atrelada no Postgres. Medimos uma janela de ~3 s em que eventos se perdem.
+  Por isso `ListaView` busca o estado atual dos itens logo após inscrever —
+  sem isso, quem abre a lista enquanto outra pessoa mexe nela veria dado
+  velho até recarregar.
+- `payload.old` chega completo nos UPDATEs, confirmando que o
+  `REPLICA IDENTITY FULL` está valendo — é o que sustenta a linha de
+  atividade dizer *o que* mudou.
+
 ## Decisões de UX
 
 - **Cor é identidade.** Cada pessoa tem uma cor fixa, usada no avatar, no

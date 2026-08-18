@@ -42,3 +42,6 @@ next-env.d.ts
 
 # O exemplo entra no repo; os valores reais nao.
 !.env.local.example
+
+# Script de verificacao descartavel
+verificar.mjs

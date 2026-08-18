@@ -135,6 +135,31 @@ export default function ListaView({
     [supabase],
   );
 
+  /* ─────────── reconciliação ─────────── */
+
+  /**
+   * O status SUBSCRIBED chega antes de a replicação estar atrelada de fato:
+   * medimos uma janela de ~3s em que eventos se perdem. Quem abre a lista
+   * enquanto outra pessoa mexe nela ficaria vendo dado velho até recarregar.
+   * Buscar o estado atual logo após inscrever fecha essa janela.
+   */
+  const reconcile = useCallback(async () => {
+    const { data } = await supabase
+      .from("items")
+      .select("*")
+      .eq("list_id", list.id)
+      .order("created_at", { ascending: true })
+      .returns<Item[]>();
+    if (!data) return;
+
+    setItems((local) => {
+      // Itens ainda voando para o servidor não existem lá: preservá-los,
+      // senão eles sumiriam da tela no meio do envio.
+      const emVoo = local.filter((i) => i.id.startsWith("tmp-"));
+      return [...data, ...emVoo];
+    });
+  }, [supabase, list.id]);
+
   /* ─────────── realtime: mudanças nos itens ─────────── */
 
   useEffect(() => {
@@ -187,12 +212,14 @@ export default function ListaView({
           pushToast({ text: `${name} ${phrase}`, actor });
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") void reconcile();
+      });
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [supabase, list.id, me.id, ensureProfile, flashRemote, pushToast]);
+  }, [supabase, list.id, me.id, ensureProfile, flashRemote, pushToast, reconcile]);
 
   /* ─────────── realtime: a lista em si ─────────── */
 
