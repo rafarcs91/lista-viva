@@ -1,0 +1,124 @@
+"use client";
+
+import { useRef, useState } from "react";
+import type { Item, PersonColor, Profile } from "@/lib/types";
+
+const GLOW: Record<PersonColor, string> = {
+  mint: "rgba(14, 169, 122, 0.26)",
+  violet: "rgba(122, 107, 208, 0.28)",
+  amber: "rgba(201, 138, 46, 0.28)",
+  coral: "rgba(217, 100, 78, 0.28)",
+  sky: "rgba(58, 134, 184, 0.28)",
+};
+
+const SWIPE_THRESHOLD = 96;
+
+export default function ItemRow({
+  item,
+  actor,
+  isMe,
+  remoteColor,
+  isPending,
+  onToggle,
+  onDelete,
+}: {
+  item: Item;
+  actor?: Profile;
+  isMe: boolean;
+  remoteColor?: PersonColor;
+  isPending: boolean;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const drag = useRef({ startX: 0, dx: 0, active: false });
+  const [dragging, setDragging] = useState(false);
+
+  function onPointerDown(e: React.PointerEvent) {
+    if ((e.target as HTMLElement).closest(".check")) return;
+    drag.current = { startX: e.clientX, dx: 0, active: true };
+    setDragging(true);
+    cardRef.current?.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!drag.current.active || !cardRef.current) return;
+    drag.current.dx = Math.min(0, e.clientX - drag.current.startX);
+    cardRef.current.style.transform = `translateX(${drag.current.dx}px)`;
+  }
+
+  function endDrag() {
+    if (!drag.current.active || !cardRef.current) return;
+    drag.current.active = false;
+    setDragging(false);
+
+    if (drag.current.dx < -SWIPE_THRESHOLD) {
+      cardRef.current.style.transform = "translateX(-100%)";
+      window.setTimeout(onDelete, 130);
+    } else {
+      cardRef.current.style.transform = "";
+    }
+  }
+
+  const actorName = isMe ? "você" : (actor?.display_name ?? "alguém");
+  const actorColor = actor?.color ?? "mint";
+
+  return (
+    <li
+      className={[
+        "item",
+        item.done ? "is-done" : "",
+        remoteColor ? "is-remote" : "",
+        isPending ? "is-pending" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      style={
+        remoteColor
+          ? ({
+              "--remote-color": `var(--${remoteColor})`,
+              "--remote-glow": GLOW[remoteColor],
+            } as React.CSSProperties)
+          : undefined
+      }
+    >
+      <div className="item-swipe" aria-hidden="true">
+        Excluir
+      </div>
+
+      <div
+        ref={cardRef}
+        className={`item-card${dragging ? " is-dragging" : ""}`}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+      >
+        <button
+          className="check"
+          type="button"
+          aria-pressed={item.done}
+          aria-label={`${item.done ? "Desmarcar" : "Marcar"} ${item.name}`}
+          onClick={onToggle}
+          disabled={isPending}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12.5 10 17.5 19 7.5" />
+          </svg>
+        </button>
+
+        <div className="item-body">
+          <span className="item-name">{item.name}</span>
+          <span className="item-meta">
+            {item.done ? "no carrinho · " : "adicionado por "}
+            <span className="who" data-color={actorColor}>
+              {actorName}
+            </span>
+          </span>
+        </div>
+
+        {item.qty > 1 && <span className="qty">{item.qty} un</span>}
+      </div>
+    </li>
+  );
+}
