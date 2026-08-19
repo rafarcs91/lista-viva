@@ -6,6 +6,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import type { Item, Member, PersonColor, Profile } from "@/lib/types";
+import {
+  aplicar,
+  carregar,
+  ehFalhaDeRede,
+  ehTemporario,
+  enfileirar,
+  executarOperacao,
+  idsPendentes,
+  salvar,
+  type Operacao,
+  type OperacaoNova,
+} from "@/lib/fila-offline";
 import Avatar from "./Avatar";
 import ItemRow from "./ItemRow";
 import ShareSheet from "./ShareSheet";
@@ -77,6 +89,59 @@ export default function ListaView({
   const qtyTimers = useRef<Map<string, number>>(new Map());
   const qtyBaseline = useRef<Map<string, number>>(new Map());
 
+  /* ─────────── fila offline ─────────── */
+
+  const [fila, setFila] = useState<Operacao[]>([]);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [semRede, setSemRede] = useState(false);
+  const filaRef = useRef<Operacao[]>([]);
+
+  useEffect(() => {
+    filaRef.current = fila;
+  }, [fila]);
+
+  // A fila sobrevive a fechar o app: sem isso, sair do mercado e voltar
+  // depois perderia tudo que foi feito sem sinal.
+  //
+  // A leitura fica para o tick seguinte por dois motivos: o estado inicial
+  // vazio casa com o HTML vindo do servidor, evitando divergência de
+  // hidratação; e o React não precisa renderizar duas vezes no mesmo commit.
+  useEffect(() => {
+    const agendado = window.setTimeout(() => {
+      const guardada = carregar(list.id);
+      if (guardada.length > 0) {
+        filaRef.current = guardada;
+        setFila(guardada);
+      }
+    }, 0);
+    return () => window.clearTimeout(agendado);
+  }, [list.id]);
+
+  const anotar = useCallback(
+    (op: OperacaoNova) => {
+      const carimbada = { ...op, em: Date.now() } as Operacao;
+      setFila((atual) => {
+        const nova = enfileirar(atual, carimbada);
+        salvar(list.id, nova);
+        filaRef.current = nova;
+        return nova;
+      });
+    },
+    [list.id],
+  );
+
+  const descartar = useCallback(
+    (alvo: Operacao) => {
+      setFila((atual) => {
+        const nova = atual.filter((o) => o !== alvo);
+        salvar(list.id, nova);
+        filaRef.current = nova;
+        return nova;
+      });
+    },
+    [list.id],
+  );
+
   const profiles = useMemo(() => {
     const map: Record<string, Profile> = {};
     for (const m of members) map[m.id] = m;
@@ -136,6 +201,74 @@ export default function ListaView({
     [supabase],
   );
 
+
+  /**
+   * Reenvia a fila. Para na primeira falha de rede e guarda o resto: sem
+   * conexão não adianta insistir nas seguintes, e a ordem importa.
+   * Operação que falha por outro motivo é descartada — repeti-la eternamente
+   * deixaria a pessoa com uma pendência que nunca some.
+   */
+  const sincronizar = useCallback(async () => {
+    const pendentes = filaRef.current;
+    if (pendentes.length === 0) return;
+
+    setSincronizando(true);
+
+    for (const op of pendentes) {
+      const r = await executarOperacao(supabase, op, {
+        listaId: list.id,
+        usuarioId: me.id,
+      });
+
+      // Sem rede não adianta tentar as seguintes; o resto fica para depois.
+      if (r.estado === "rede") break;
+
+      if (r.estado === "ok" && op.tipo === "criar" && r.item) {
+        // O provisório dá lugar ao real, sem duplicar caso o realtime já
+        // tenha trazido a linha.
+        const real = r.item;
+        setItems((l) => {
+          const semTemp = l.filter((i) => i.id !== op.id);
+          return semTemp.some((i) => i.id === real.id) ? semTemp : [...semTemp, real];
+        });
+      }
+
+      descartar(op);
+
+      if (r.estado === "erro") {
+        setError("Uma alteração não pôde ser salva e foi descartada.");
+      }
+    }
+
+    setSincronizando(false);
+  }, [supabase, list.id, me.id, descartar]);
+
+  // Volta a rede, volta a fila. O evento `online` é a deixa mais confiável;
+  // a checagem periódica cobre o caso de o navegador achar que está online
+  // mas o servidor seguir inacessível.
+  useEffect(() => {
+    const aoVoltar = () => {
+      setSemRede(false);
+      void sincronizar();
+    };
+    const aoCair = () => setSemRede(true);
+
+    window.addEventListener("online", aoVoltar);
+    window.addEventListener("offline", aoCair);
+
+    void Promise.resolve().then(() => {
+      if (typeof navigator !== "undefined") setSemRede(!navigator.onLine);
+      return sincronizar();
+    });
+    const relogio = window.setInterval(() => void sincronizar(), 20_000);
+
+    return () => {
+      window.removeEventListener("online", aoVoltar);
+      window.removeEventListener("offline", aoCair);
+      window.clearInterval(relogio);
+    };
+  }, [sincronizar]);
+
   /* ─────────── reconciliação ─────────── */
 
   /**
@@ -153,13 +286,10 @@ export default function ListaView({
       .returns<Item[]>();
     if (!data) return;
 
-    setItems((local) => {
-      // Itens ainda voando para o servidor não existem lá: preservá-los,
-      // senão eles sumiriam da tela no meio do envio.
-      const emVoo = local.filter((i) => i.id.startsWith("tmp-"));
-      return [...data, ...emVoo];
-    });
-  }, [supabase, list.id]);
+    // Estado do servidor + fila pendente. Sem reaplicar a fila, a
+    // reconciliação desfaria na tela tudo que foi feito sem sinal.
+    setItems(aplicar(data, filaRef.current, { listaId: list.id, usuarioId: me.id }));
+  }, [supabase, list.id, me.id]);
 
   /* ─────────── realtime: mudanças nos itens ─────────── */
 
@@ -333,9 +463,15 @@ export default function ListaView({
 
     markPending(tempId, false);
 
+    if (err && ehFalhaDeRede(err)) {
+      // O item fica na tela com o id provisório e vai para a fila.
+      anotar({ tipo: "criar", id: tempId, campos: { name, qty, done: false } });
+      return;
+    }
+
     if (err || !data) {
       setItems((l) => l.filter((i) => i.id !== tempId));
-      setError(err?.message ?? "Não consegui adicionar o item.");
+      setError("Não consegui adicionar o item.");
       return;
     }
 
@@ -356,12 +492,25 @@ export default function ListaView({
     markPending(item.id, true);
     setError("");
 
+    // Item que ainda não existe no servidor não tem o que atualizar lá:
+    // a alteração vai direto para o rascunho na fila.
+    if (ehTemporario(item.id)) {
+      anotar({ tipo: "atualizar", id: item.id, campos: { done: next } });
+      markPending(item.id, false);
+      return;
+    }
+
     const { error: err } = await supabase
       .from("items")
       .update({ done: next, checked_by: me.id, updated_by: me.id })
       .eq("id", item.id);
 
     markPending(item.id, false);
+
+    if (err && ehFalhaDeRede(err)) {
+      anotar({ tipo: "atualizar", id: item.id, campos: { done: next } });
+      return;
+    }
 
     if (err) {
       setItems((l) =>
@@ -395,10 +544,20 @@ export default function ListaView({
       const baseline = qtyBaseline.current.get(item.id) ?? item.qty;
       qtyBaseline.current.delete(item.id);
 
+      if (ehTemporario(item.id)) {
+        anotar({ tipo: "atualizar", id: item.id, campos: { qty: value } });
+        return;
+      }
+
       const { error: err } = await supabase
         .from("items")
         .update({ qty: value, updated_by: me.id })
         .eq("id", item.id);
+
+      if (err && ehFalhaDeRede(err)) {
+        anotar({ tipo: "atualizar", id: item.id, campos: { qty: value } });
+        return;
+      }
 
       if (err) {
         setItems((l) =>
@@ -420,12 +579,23 @@ export default function ListaView({
     markPending(item.id, true);
     setError("");
 
+    if (ehTemporario(item.id)) {
+      anotar({ tipo: "atualizar", id: item.id, campos: { name: novoNome } });
+      markPending(item.id, false);
+      return;
+    }
+
     const { error: err } = await supabase
       .from("items")
       .update({ name: novoNome, updated_by: me.id })
       .eq("id", item.id);
 
     markPending(item.id, false);
+
+    if (err && ehFalhaDeRede(err)) {
+      anotar({ tipo: "atualizar", id: item.id, campos: { name: novoNome } });
+      return;
+    }
 
     if (err) {
       setItems((l) =>
@@ -439,7 +609,18 @@ export default function ListaView({
     setItems((l) => l.filter((i) => i.id !== item.id));
     setError("");
 
+    if (ehTemporario(item.id)) {
+      // Criado e apagado sem sinal: o servidor nunca soube que existiu.
+      anotar({ tipo: "excluir", id: item.id });
+      return;
+    }
+
     const { error: err } = await supabase.from("items").delete().eq("id", item.id);
+
+    if (err && ehFalhaDeRede(err)) {
+      anotar({ tipo: "excluir", id: item.id });
+      return;
+    }
 
     if (err) {
       setItems((l) => [...l, item]);
@@ -474,6 +655,9 @@ export default function ListaView({
   }
 
   /* ─────────── render ─────────── */
+
+  const naFila = idsPendentes(fila);
+  const aguardando = (id: string) => pending.has(id) || naFila.has(id);
 
   const pendingItems = items.filter((i) => !i.done);
   const doneItems = items.filter((i) => i.done);
@@ -579,7 +763,7 @@ export default function ListaView({
                 actor={profiles[item.added_by ?? ""]}
                 isMe={item.added_by === me.id}
                 remoteColor={remote[item.id]}
-                isPending={pending.has(item.id)}
+                isPending={aguardando(item.id)}
                 onToggle={() => toggleItem(item)}
                 onDelete={() => deleteItem(item)}
                 onQty={(next) => changeQty(item, next)}
@@ -607,7 +791,7 @@ export default function ListaView({
                     actor={profiles[item.checked_by ?? item.added_by ?? ""]}
                     isMe={(item.checked_by ?? item.added_by) === me.id}
                     remoteColor={remote[item.id]}
-                    isPending={pending.has(item.id)}
+                    isPending={aguardando(item.id)}
                     onToggle={() => toggleItem(item)}
                     onDelete={() => deleteItem(item)}
                     onQty={(next) => changeQty(item, next)}
@@ -645,6 +829,24 @@ export default function ListaView({
           </div>
         ))}
       </div>
+
+      {fila.length > 0 && (
+        <div className={`sync-bar${semRede ? " is-offline" : ""}`} role="status">
+          <span className="sync-dot" />
+          <span>
+            {sincronizando
+              ? "Enviando alterações…"
+              : semRede
+                ? `Sem conexão · ${fila.length} ${fila.length === 1 ? "alteração guardada" : "alterações guardadas"}`
+                : `${fila.length} ${fila.length === 1 ? "alteração aguardando" : "alterações aguardando"}`}
+          </span>
+          {!sincronizando && !semRede && (
+            <button type="button" onClick={() => void sincronizar()}>
+              tentar agora
+            </button>
+          )}
+        </div>
+      )}
 
       <form className="compose" onSubmit={addItem}>
         <div className="compose-field">

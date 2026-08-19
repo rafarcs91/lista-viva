@@ -143,7 +143,7 @@ algo como `ola@seudominio.com.br`.
 
 ## Testes de regressão
 
-40 casos, verdes contra um Supabase real em ~30 s.
+64 casos, verdes contra um Supabase real em ~35 s.
 
 ```bash
 npm test          # roda a suíte uma vez
@@ -163,6 +163,8 @@ testadas com mock — o mock passaria mesmo com a política errada.
 | `tests/realtime.test.ts` | Os dois ajustes de banco mais fáceis de perder numa migração (ver abaixo). |
 | `tests/seguranca.test.ts` | Que os testes não conseguem apagar dados que não criaram. |
 | `tests/erros-auth.test.ts` | Tradução das mensagens de login. Função pura: roda sem banco nem credencial. |
+| `tests/fila-offline.test.ts` | Coalescência e projeção da fila offline. Também sem banco. |
+| `tests/fila-reenvio.test.ts` | A tradução de cada operação da fila na escrita correspondente, contra o banco. |
 
 ### Por que estes testes existem
 
@@ -224,6 +226,8 @@ tests/
   realtime.test.ts            Eventos, payload.old, DELETE filtrado
   seguranca.test.ts           Trava contra apagar dado real
   erros-auth.test.ts          Tradução dos erros (puro, sem rede)
+  fila-offline.test.ts        Coalescência da fila (puro, sem rede)
+  fila-reenvio.test.ts        Reenvio da fila contra o banco
 src/
   proxy.ts                    Renova a sessão e protege as rotas
   app/
@@ -288,8 +292,12 @@ elas mostraram de não-óbvio:
 
 - **Cor é identidade.** Cada pessoa tem uma cor fixa, usada no avatar, no
   anel do cartão que ela mexeu e no toast. Quem fez o quê se lê num relance.
-- **Tudo é otimista.** A tela muda no toque; o banco confirma depois. Se
-  falhar, desfaz e avisa. Supermercado tem sinal ruim.
+- **Tudo é otimista, e sem rede nada se perde.** A tela muda no toque. Se a
+  escrita falhar por falta de conexão, a alteração vai para uma fila que
+  sobrevive a fechar o app e é reenviada quando o sinal volta — supermercado
+  tem sinal ruim, e é justamente lá que o app precisa funcionar. Falha de
+  permissão ou validação continua desfazendo e avisando: repetir isso nunca
+  daria certo.
 - **Desfazer em vez de confirmar.** Excluir acontece direto, com 5 segundos
   de *Desfazer*. Confirmação pune quem tem certeza; desfazer salva quem errou.
 - **O comprado sai do caminho.** "No carrinho" nasce fechado — item concluído
@@ -306,6 +314,5 @@ elas mostraram de não-óbvio:
 
 - Editar o nome do item (a infra de `updated_by` e diff já cobre)
 - Agrupar por categoria com detecção pelo nome do item
-- Fila offline (hoje uma ação sem rede falha e desfaz)
 - Sugestões a partir do histórico de compras
 - PWA instalável
