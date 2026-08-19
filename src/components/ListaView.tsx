@@ -383,6 +383,64 @@ export default function ListaView({
     };
   }, [supabase, list.id, router]);
 
+  /* ─────────── realtime: quem entra e quem sai ─────────── */
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`membros:${list.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "list_members",
+          filter: `list_id=eq.${list.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const saiu = (payload.old as { user_id?: string })?.user_id;
+            if (!saiu) return;
+
+            // Fui removida: continuar na tela seria editar uma lista a que
+            // já não tenho acesso, e toda escrita passaria a falhar por RLS.
+            if (saiu === me.id) {
+              router.push("/listas");
+              router.refresh();
+              return;
+            }
+
+            setMembers((m) => m.filter((x) => x.id !== saiu));
+            return;
+          }
+
+          if (payload.eventType !== "INSERT") return;
+
+          const linha = payload.new as { user_id: string; role: "owner" | "editor" };
+          if (linha.user_id === me.id) return;
+
+          void (async () => {
+            const { data } = await supabase
+              .from("profiles")
+              .select("id, display_name, color")
+              .eq("id", linha.user_id)
+              .maybeSingle();
+            if (!data) return;
+
+            setMembers((m) =>
+              m.some((x) => x.id === data.id) ? m : [...m, { ...data, role: linha.role }],
+            );
+            setActivity(`${data.display_name} entrou na lista`);
+            pushToast({ text: `${data.display_name} entrou na lista`, actor: data });
+          })();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [supabase, list.id, me.id, router, pushToast]);
+
   /* ─────────── realtime: quem está com a lista aberta ─────────── */
 
   useEffect(() => {

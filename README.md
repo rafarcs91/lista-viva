@@ -143,7 +143,7 @@ algo como `ola@seudominio.com.br`.
 
 ## Testes de regressão
 
-73 casos, verdes contra um Supabase real em ~35 s.
+75 casos, verdes contra um Supabase real em ~40 s.
 
 ```bash
 npm test          # roda a suíte uma vez
@@ -292,6 +292,10 @@ elas mostraram de não-óbvio:
 
 ## Decisões de UX
 
+- **Presença é ao vivo, inclusive quem chega.** Aceitar um convite faz o
+  avatar aparecer na hora para quem já está na lista, com aviso. Quem é
+  removido volta para "Suas listas" em vez de seguir editando algo a que
+  perdeu acesso — sem isso, cada toque falharia por RLS sem explicação.
 - **Cor é identidade.** Cada pessoa tem uma cor fixa, usada no avatar, no
   anel do cartão que ela mexeu e no toast. Quem fez o quê se lê num relance.
 - **Tudo é otimista, e sem rede nada se perde.** A tela muda no toque. Se a
@@ -317,5 +321,6 @@ elas mostraram de não-óbvio:
 - Editar o nome do item (a infra de `updated_by` e diff já cobre)
 - Agrupar por categoria com detecção pelo nome do item
 - Sugestões a partir do histórico de compras
+- Agrupar por categoria com detecção pelo nome do item
 - Ver a lista offline na primeira abertura (hoje o SW guarda só a casca;
   mostrar os dados exigiria renderizar a lista no cliente)

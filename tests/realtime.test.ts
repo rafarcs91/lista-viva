@@ -206,3 +206,74 @@ describe("a lista em si também sincroniza", () => {
     expect(evento?.new?.title).toBe("[teste] titulo novo");
   });
 });
+
+describe("quem entra e quem sai", () => {
+  let ana: Sessao;
+  let leo: Sessao;
+  let listaId: string;
+  let token: string;
+  let canal: RealtimeChannel;
+  const eventos: Evento[] = [];
+
+  beforeAll(async () => {
+    [ana, leo] = await Promise.all([entrar("a"), entrar("b")]);
+    const lista = await criarLista(ana, "membros");
+    listaId = lista.id;
+
+    const { data } = await ana.sb
+      .from("list_invites")
+      .insert({ list_id: listaId, created_by: ana.id })
+      .select("token")
+      .single();
+    token = data!.token;
+
+    canal = await inscrever(ana, `membros:${listaId}`, (c) =>
+      c.on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "list_members",
+          filter: `list_id=eq.${listaId}`,
+        },
+        (payload) => eventos.push(payload as unknown as Evento),
+      ),
+    );
+  });
+
+  afterAll(async () => {
+    if (canal) await ana.sb.removeChannel(canal);
+    if (listaId) await apagarLista(ana, listaId);
+  });
+
+  test("entrar pelo convite avisa quem já está na lista", async () => {
+    await leo.sb.rpc("join_list_with_token", { p_token: token });
+    await esperar(2500);
+
+    const evento = eventos.find(
+      (e) => e.eventType === "INSERT" && e.new?.user_id === leo.id,
+    );
+
+    expect(evento).toBeDefined();
+    expect(evento?.new?.role).toBe("editor");
+  });
+
+  test("sair da lista também chega, com a chave inteira no payload", async () => {
+    // A chave primária de list_members é (list_id, user_id). Se o payload
+    // de DELETE não trouxesse as duas colunas, o filtro por list_id nunca
+    // casaria e a saída passaria despercebida — foi o que aconteceu com
+    // `items`, que precisou de REPLICA IDENTITY FULL. Aqui a PK basta.
+    await leo.sb
+      .from("list_members")
+      .delete()
+      .eq("list_id", listaId)
+      .eq("user_id", leo.id);
+    await esperar(2500);
+
+    const evento = eventos.find((e) => e.eventType === "DELETE");
+
+    expect(evento).toBeDefined();
+    expect(evento?.old?.user_id).toBe(leo.id);
+    expect(evento?.old?.list_id).toBe(listaId);
+  });
+});

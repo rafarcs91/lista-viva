@@ -292,3 +292,19 @@ exception
   when duplicate_object then null;
 end;
 $$;
+
+-- Quem entra e quem sai também é tempo real: numa tela cujo assunto é
+-- presença, o avatar de quem acabou de aceitar o convite não deveria
+-- esperar um recarregamento para aparecer.
+--
+-- Sem REPLICA IDENTITY FULL de propósito: a chave primária de list_members
+-- é (list_id, user_id), então o payload de DELETE já carrega as duas
+-- colunas — o filtro por list_id casa, e ninguém precisa pagar WAL extra.
+
+do $$
+begin
+  alter publication supabase_realtime add table public.list_members;
+exception
+  when duplicate_object then null;
+end;
+$$;
