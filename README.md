@@ -143,7 +143,7 @@ algo como `ola@seudominio.com.br`.
 
 ## Testes de regressão
 
-25 casos, verdes contra um Supabase real em ~23 s.
+27 casos, verdes contra um Supabase real em ~25 s.
 
 ```bash
 npm test          # roda a suíte uma vez
@@ -161,6 +161,7 @@ testadas com mock — o mock passaria mesmo com a política errada.
 | `tests/rls.test.ts` | Isolamento entre pessoas: quem não é membro não lê, não escreve, não vê perfis. Triggers de perfil e de dona. Cascade. |
 | `tests/convite.test.ts` | Token do convite, acesso concedido, entrada repetida sem duplicar, saída revogando acesso. |
 | `tests/realtime.test.ts` | Os dois ajustes de banco mais fáceis de perder numa migração (ver abaixo). |
+| `tests/seguranca.test.ts` | Que os testes não conseguem apagar dados que não criaram. |
 
 ### Por que estes testes existem
 
@@ -186,10 +187,21 @@ variáveis têm nomes próprios (`TEST_*`) e não herdam nada do `.env.local`:
 apontar o alvo precisa ser uma decisão consciente. Sem `.env.test`, a suíte
 recusa rodar em vez de adivinhar.
 
-**Use um projeto Supabase separado para testes.** Rodar contra produção
-funciona — os testes só tocam dados que eles mesmos criam, prefixados com
-`[teste]`, e limpam no final — mas um teste mal escrito no futuro não teria
-essa disciplina.
+### Rodando contra o banco de produção
+
+Foi a escolha deste projeto: um Supabase separado custaria a última vaga do
+plano gratuito. Para que isso seja seguro, a disciplina é verificada por
+código, não confiada à memória de quem escrever o próximo teste:
+
+- Toda lista criada pelos testes nasce com o prefixo `[teste]`.
+- `apagarLista()` **recusa** qualquer lista sem esse prefixo, com erro
+  explicando o porquê. Um teste futuro que tente apagar dado real falha.
+- `tests/seguranca.test.ts` verifica essa recusa a cada execução.
+- Uma varredura no fim remove listas de teste órfãs, caso a suíte caia no
+  meio e o `afterAll` não rode.
+
+Para migrar a um projeto dedicado depois, basta trocar `TEST_SUPABASE_URL`
+e `TEST_SUPABASE_ANON_KEY` — no `.env.test` e nos secrets do repositório.
 
 1. Crie o projeto de teste e rode `supabase/schema.sql` nele.
 2. Em **Authentication → Users → Add user**, crie três contas com
@@ -209,6 +221,7 @@ tests/
   rls.test.ts                 Isolamento entre pessoas
   convite.test.ts             Token, acesso, saída
   realtime.test.ts            Eventos, payload.old, DELETE filtrado
+  seguranca.test.ts           Trava contra apagar dado real
 src/
   proxy.ts                    Renova a sessão e protege as rotas
   app/

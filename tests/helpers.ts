@@ -31,11 +31,18 @@ export async function entrar(rotulo: "a" | "b" | "c"): Promise<Sessao> {
   return { sb, id: data.user.id, rotulo };
 }
 
-/** Cria uma lista com título rastreável, para facilitar limpeza manual. */
+/**
+ * Toda lista criada pelos testes carrega este prefixo, e só listas com ele
+ * podem ser apagadas. É a rede de segurança que permite rodar a suíte
+ * contra o banco de produção: mesmo um teste futuro mal escrito não
+ * consegue apagar a lista de compras de ninguém.
+ */
+export const PREFIXO_TESTE = "[teste]";
+
 export async function criarLista(dono: Sessao, titulo = "teste automatizado") {
   const { data, error } = await dono.sb
     .from("lists")
-    .insert({ title: `[teste] ${titulo}`, owner_id: dono.id })
+    .insert({ title: `${PREFIXO_TESTE} ${titulo}`, owner_id: dono.id })
     .select("*")
     .single();
 
@@ -43,8 +50,42 @@ export async function criarLista(dono: Sessao, titulo = "teste automatizado") {
   return data as { id: string; title: string; owner_id: string };
 }
 
+/** Apaga uma lista, recusando qualquer uma que não tenha sido criada aqui. */
 export async function apagarLista(dono: Sessao, listaId: string) {
+  const { data } = await dono.sb
+    .from("lists")
+    .select("title")
+    .eq("id", listaId)
+    .maybeSingle();
+
+  // Já sumiu (ou nunca foi visível): nada a fazer.
+  if (!data) return;
+
+  if (!data.title.startsWith(PREFIXO_TESTE)) {
+    throw new Error(
+      `Recusando apagar "${data.title}": não é uma lista de teste. ` +
+        `Os testes só podem apagar listas que eles mesmos criaram, com o ` +
+        `prefixo "${PREFIXO_TESTE}". Use criarLista() em vez de inserir à mão.`,
+    );
+  }
+
   await dono.sb.from("lists").delete().eq("id", listaId);
+}
+
+/**
+ * Varre listas de teste que tenham sobrado — acontece quando a suíte é
+ * interrompida no meio e o afterAll não roda.
+ */
+export async function limparResiduos(sessao: Sessao) {
+  const { data } = await sessao.sb
+    .from("lists")
+    .select("id, title")
+    .like("title", `${PREFIXO_TESTE}%`);
+
+  for (const lista of data ?? []) {
+    await sessao.sb.from("lists").delete().eq("id", lista.id);
+  }
+  return data?.length ?? 0;
 }
 
 export async function adicionarItem(
