@@ -143,6 +143,8 @@ algo como `ola@seudominio.com.br`.
 
 ## Testes de regressão
 
+25 casos, verdes contra um Supabase real em ~23 s.
+
 ```bash
 npm test          # roda a suíte uma vez
 npm run test:watch
