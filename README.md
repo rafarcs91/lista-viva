@@ -20,7 +20,9 @@ Ao trocar de domínio, três lugares precisam acompanhar, senão o login
 quebra: **Site URL** e **Redirect URLs** no Supabase, e o *Sender email* em
 SMTP Settings.
 
-Deploy: `vercel deploy --prod` a partir da raiz do projeto.
+Deploy: automático. Todo push em `master` publica em produção; cada Pull
+Request ganha uma URL de preview própria. Para publicar manualmente sem
+passar pelo Git, `vercel deploy --prod` na raiz do projeto.
 
 > Projetos novos na Vercel nascem com *Deployment Protection* ligada — o
 > site fica atrás do login da Vercel e ninguém de fora consegue abrir.
