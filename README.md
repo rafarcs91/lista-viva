@@ -1,9 +1,31 @@
 # Lista Viva
 
+**No ar: https://lista.rafarcs.com**
+
 Lista de compras compartilhada. Quem está com a lista aberta vê os itens
 sendo marcados, adicionados e removidos na hora — sem recarregar nada.
 
-Next.js 16 (App Router) · Supabase (Postgres + Realtime + Auth) · TypeScript
+Next.js 16 (App Router) · Supabase (Postgres + Realtime + Auth) · Resend
+· hospedado na Vercel
+
+## Produção
+
+| Peça | Onde |
+|---|---|
+| App | `lista.rafarcs.com` (CNAME → Vercel, projeto `rcs14/lista-viva`) |
+| Banco e auth | Supabase `ajcghzkmokmbnvkavozp` |
+| E-mail | Resend, domínio `rafarcs.com` verificado, remetente `login@rafarcs.com` |
+
+Ao trocar de domínio, três lugares precisam acompanhar, senão o login
+quebra: **Site URL** e **Redirect URLs** no Supabase, e o *Sender email* em
+SMTP Settings.
+
+Deploy: `vercel deploy --prod` a partir da raiz do projeto.
+
+> Projetos novos na Vercel nascem com *Deployment Protection* ligada — o
+> site fica atrás do login da Vercel e ninguém de fora consegue abrir.
+> Desligue em **Settings → Deployment Protection**.
+
 
 ---
 
