@@ -4,6 +4,9 @@ on:
   push:
     branches: [master]
   pull_request:
+  # Permite rodar a CI sob demanda pelo botão "Run workflow" na aba Actions,
+  # sem precisar inventar um commit.
+  workflow_dispatch:
 
 jobs:
   # Roda sempre: não depende de banco nem de segredo nenhum.
