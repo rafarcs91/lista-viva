@@ -23,6 +23,8 @@ export default function ShareSheet({
   onRemover: (userId: string) => void;
 }) {
   const [link, setLink] = useState<string | null>(null);
+  const [validade, setValidade] = useState<string | null>(null);
+  const [gerando, setGerando] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   // Remover alguém afeta outra pessoa, então pede um segundo toque. O
@@ -31,6 +33,35 @@ export default function ShareSheet({
   const relogio = useRef<number | undefined>(undefined);
 
   useEffect(() => () => window.clearTimeout(relogio.current), []);
+
+  /**
+   * Gerar um link novo apaga os anteriores. É o que dá sentido a remover
+   * alguém: sem revogar, a pessoa removida voltaria pelo link que ainda tem.
+   */
+  async function gerarNovoLink() {
+    setGerando(true);
+    setError("");
+
+    const supabase = createClient();
+    await supabase.from("list_invites").delete().eq("list_id", listId);
+
+    const { data, error: err } = await supabase
+      .from("list_invites")
+      .insert({ list_id: listId, created_by: meId })
+      .select("token, expires_at")
+      .single();
+
+    setGerando(false);
+
+    if (err || !data) {
+      setError("Não consegui gerar um link novo.");
+      return;
+    }
+
+    setLink(`${window.location.origin}/j/${data.token}`);
+    setValidade(data.expires_at);
+    setCopied(false);
+  }
 
   function pedirRemocao(userId: string) {
     if (armado !== userId) {
@@ -60,24 +91,29 @@ export default function ShareSheet({
 
       // Reaproveita um convite existente — um link por lista basta,
       // e trocar o link a cada abertura invalidaria o que já foi enviado.
-      const { data: existing } = await supabase
+      // Um convite vencido não serve para nada: melhor criar outro do que
+      // entregar à pessoa um link que já não funciona.
+      const { data: existente } = await supabase
         .from("list_invites")
-        .select("token")
+        .select("token, expires_at")
         .eq("list_id", listId)
+        .gt("expires_at", new Date().toISOString())
+        .order("expires_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (cancelled) return;
 
-      if (existing?.token) {
-        setLink(`${window.location.origin}/j/${existing.token}`);
+      if (existente?.token) {
+        setLink(`${window.location.origin}/j/${existente.token}`);
+        setValidade(existente.expires_at);
         return;
       }
 
       const { data, error: err } = await supabase
         .from("list_invites")
         .insert({ list_id: listId, created_by: meId })
-        .select("token")
+        .select("token, expires_at")
         .single();
 
       if (cancelled) return;
@@ -87,6 +123,7 @@ export default function ShareSheet({
         return;
       }
       setLink(`${window.location.origin}/j/${data.token}`);
+      setValidade(data.expires_at);
     })();
 
     return () => {
@@ -132,6 +169,25 @@ export default function ShareSheet({
             {copied ? "Copiado" : "Enviar"}
           </button>
         </div>
+
+        <div className="link-rodape">
+          <span>
+            {validade
+              ? `Vale até ${new Date(validade).toLocaleDateString("pt-BR", {
+                  day: "numeric",
+                  month: "long",
+                })}`
+              : " "}
+          </span>
+          <button type="button" onClick={gerarNovoLink} disabled={gerando || !link}>
+            {gerando ? "gerando…" : "gerar link novo"}
+          </button>
+        </div>
+
+        <p style={{ margin: "0 0 18px", fontSize: 12.5, color: "var(--ink-3)", lineHeight: 1.5 }}>
+          Gerar um link novo faz o anterior parar de funcionar. Quem já entrou
+          continua na lista.
+        </p>
 
         {error && (
           <div className="notice is-error" style={{ marginBottom: 14 }}>

@@ -308,3 +308,60 @@ exception
   when duplicate_object then null;
 end;
 $$;
+
+-- ── Convites com prazo ─────────────────────────────────────────
+-- Um link eterno é meia porta: remover alguém da lista não adianta se a
+-- pessoa ainda tem um convite que funciona para sempre.
+--
+-- A coluna entra sem default e é preenchida a partir de `created_at`, para
+-- que convites antigos herdem a idade real que têm em vez de ganharem sete
+-- dias novos na migração. O default passa a valer depois, para os próximos.
+
+alter table public.list_invites
+  add column if not exists expires_at timestamptz;
+
+update public.list_invites
+   set expires_at = created_at + interval '7 days'
+ where expires_at is null;
+
+alter table public.list_invites
+  alter column expires_at set default (now() + interval '7 days');
+
+-- Revogar é apagar: qualquer membro pode gerar um link novo, na mesma
+-- lógica de que qualquer membro pode convidar.
+drop policy if exists list_invites_delete on public.list_invites;
+create policy list_invites_delete on public.list_invites for delete
+  using (public.is_list_member(list_id));
+
+-- Recusar token vencido, distinguindo do inexistente: são situações
+-- diferentes para quem recebeu o link, e merecem explicações diferentes.
+create or replace function public.join_list_with_token(p_token text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_convite public.list_invites%rowtype;
+begin
+  if auth.uid() is null then
+    raise exception 'Precisa estar autenticado';
+  end if;
+
+  select * into v_convite from public.list_invites where token = p_token;
+
+  if not found then
+    raise exception 'Convite inválido' using errcode = 'P0002';
+  end if;
+
+  if v_convite.expires_at is not null and v_convite.expires_at <= now() then
+    raise exception 'Convite expirado' using errcode = 'P0003';
+  end if;
+
+  insert into public.list_members (list_id, user_id, role)
+  values (v_convite.list_id, auth.uid(), 'editor')
+  on conflict (list_id, user_id) do nothing;
+
+  return v_convite.list_id;
+end;
+$$;

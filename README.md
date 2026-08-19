@@ -143,7 +143,7 @@ algo como `ola@seudominio.com.br`.
 
 ## Testes de regressão
 
-79 casos, verdes contra um Supabase real em ~45 s.
+84 casos, verdes contra um Supabase real em ~50 s.
 
 ```bash
 npm test          # roda a suíte uma vez
@@ -261,7 +261,7 @@ prototipo.html                Protótipo de UI original (referência de design)
 | `lists` | A lista. `owner_id` é quem criou. |
 | `list_members` | Quem participa de qual lista, e com que papel. |
 | `items` | O item. `added_by`, `checked_by` e `updated_by` alimentam a linha de atividade. |
-| `list_invites` | Token do link de convite. |
+| `list_invites` | Token do link de convite, com prazo de sete dias. |
 
 ### Duas decisões que não são óbvias
 
@@ -292,6 +292,10 @@ elas mostraram de não-óbvio:
 
 ## Decisões de UX
 
+- **O convite vale sete dias e pode ser revogado.** Um link eterno faria de
+  remover alguém um teatro: a pessoa voltaria pelo link que ainda tem no
+  celular. Gerar um link novo invalida o anterior; quem já entrou continua.
+  Link vencido recebe uma explicação própria, diferente da de link quebrado.
 - **Só a dona remove participantes.** O botão aparece apenas para ela, e
   pede um segundo toque — remover afeta outra pessoa. Quem é removido perde
   o acesso na hora, mas os itens que adicionou continuam na lista: o leite
@@ -325,6 +329,7 @@ elas mostraram de não-óbvio:
 - Editar o nome do item (a infra de `updated_by` e diff já cobre)
 - Agrupar por categoria com detecção pelo nome do item
 - Sugestões a partir do histórico de compras
+- Transferir a propriedade da lista
 - Agrupar por categoria com detecção pelo nome do item
 - Ver a lista offline na primeira abertura (hoje o SW guarda só a casca;
   mostrar os dados exigiria renderizar a lista no cliente)
