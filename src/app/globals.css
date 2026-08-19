@@ -1309,3 +1309,29 @@ button.item-name:disabled {
   background: var(--amber);
   animation: none;
 }
+
+/* ═══════════════ REMOVER PARTICIPANTE ═══════════════ */
+/* Discreto em repouso: a lista de participantes é para consultar, não para
+   expulsar gente. Só ao armar é que fica vermelho. */
+
+.remover {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+  padding: 4px 11px;
+  border-radius: var(--r-pill);
+  background: var(--surface-sunk);
+  transition: background 0.2s var(--ease), color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
+}
+.remover:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+}
+.remover.is-armado {
+  color: #fff;
+  background: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent);
+  animation: armed 0.3s var(--ease-out);
+}

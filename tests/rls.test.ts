@@ -174,3 +174,86 @@ describe("apagar em cascata", () => {
     expect(data).toEqual([]);
   });
 });
+
+describe("a dona remove participantes", () => {
+  let dona: Sessao;
+  let convidada: Sessao;
+  let outra: Sessao;
+  let listaId: string;
+
+  async function convidar(quem: Sessao) {
+    const { data } = await dona.sb
+      .from("list_invites")
+      .insert({ list_id: listaId, created_by: dona.id })
+      .select("token")
+      .single();
+    await quem.sb.rpc("join_list_with_token", { p_token: data!.token });
+  }
+
+  beforeAll(async () => {
+    [dona, convidada, outra] = await Promise.all([
+      entrar("a"),
+      entrar("b"),
+      entrar("c"),
+    ]);
+    const lista = await criarLista(dona, "remocao");
+    listaId = lista.id;
+    await convidar(convidada);
+    await convidar(outra);
+  });
+
+  afterAll(async () => {
+    if (listaId) await apagarLista(dona, listaId);
+  });
+
+  test("participante NÃO consegue remover outro participante", async () => {
+    // Sem isto, qualquer convidado poderia expulsar os demais da lista.
+    await convidada.sb
+      .from("list_members")
+      .delete()
+      .eq("list_id", listaId)
+      .eq("user_id", outra.id);
+
+    const { data } = await outra.sb.from("lists").select("id").eq("id", listaId);
+    expect(data).toHaveLength(1);
+  });
+
+  test("a dona remove um participante", async () => {
+    await dona.sb
+      .from("list_members")
+      .delete()
+      .eq("list_id", listaId)
+      .eq("user_id", outra.id);
+
+    const { data } = await dona.sb
+      .from("list_members")
+      .select("user_id")
+      .eq("list_id", listaId)
+      .eq("user_id", outra.id);
+    expect(data).toEqual([]);
+  });
+
+  test("quem foi removido perde o acesso na hora", async () => {
+    const { data } = await outra.sb.from("lists").select("id").eq("id", listaId);
+    expect(data).toEqual([]);
+  });
+
+  test("os itens de quem saiu continuam na lista", async () => {
+    // Remover alguém não é apagar o que a pessoa contribuiu: o leite que
+    // ela adicionou continua sendo necessário para a compra.
+    await adicionarItem(convidada, listaId, "Item da convidada", 1);
+
+    await dona.sb
+      .from("list_members")
+      .delete()
+      .eq("list_id", listaId)
+      .eq("user_id", convidada.id);
+
+    const { data } = await dona.sb
+      .from("items")
+      .select("name")
+      .eq("list_id", listaId);
+
+    expect(data?.map((i) => i.name)).toContain("Item da convidada");
+  });
+});

@@ -143,7 +143,7 @@ algo como `ola@seudominio.com.br`.
 
 ## Testes de regressão
 
-75 casos, verdes contra um Supabase real em ~40 s.
+79 casos, verdes contra um Supabase real em ~45 s.
 
 ```bash
 npm test          # roda a suíte uma vez
@@ -292,6 +292,10 @@ elas mostraram de não-óbvio:
 
 ## Decisões de UX
 
+- **Só a dona remove participantes.** O botão aparece apenas para ela, e
+  pede um segundo toque — remover afeta outra pessoa. Quem é removido perde
+  o acesso na hora, mas os itens que adicionou continuam na lista: o leite
+  que ela pôs lá continua sendo necessário para a compra.
 - **Presença é ao vivo, inclusive quem chega.** Aceitar um convite faz o
   avatar aparecer na hora para quem já está na lista, com aviso. Quem é
   removido volta para "Suas listas" em vez de seguir editando algo a que

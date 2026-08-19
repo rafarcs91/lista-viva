@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Member } from "@/lib/types";
 import Avatar from "./Avatar";
@@ -9,18 +9,40 @@ export default function ShareSheet({
   listId,
   members,
   meId,
+  souDona,
   online,
   onClose,
+  onRemover,
 }: {
   listId: string;
   members: Member[];
   meId: string;
+  souDona: boolean;
   online: Set<string>;
   onClose: () => void;
+  onRemover: (userId: string) => void;
 }) {
   const [link, setLink] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  // Remover alguém afeta outra pessoa, então pede um segundo toque. O
+  // gatilho se desarma sozinho para não ficar armado sem querer.
+  const [armado, setArmado] = useState<string | null>(null);
+  const relogio = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(relogio.current), []);
+
+  function pedirRemocao(userId: string) {
+    if (armado !== userId) {
+      window.clearTimeout(relogio.current);
+      setArmado(userId);
+      relogio.current = window.setTimeout(() => setArmado(null), 4000);
+      return;
+    }
+    window.clearTimeout(relogio.current);
+    setArmado(null);
+    onRemover(userId);
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -122,6 +144,12 @@ export default function ShareSheet({
           <i className="rule" />
         </div>
 
+        {souDona && members.length > 1 && (
+          <p style={{ margin: "0 0 4px", fontSize: 12.5, color: "var(--ink-3)" }}>
+            Ao remover alguém, os itens que a pessoa adicionou continuam na lista.
+          </p>
+        )}
+
         <div>
           {members.map((m) => (
             <div className="member" key={m.id}>
@@ -140,7 +168,18 @@ export default function ShareSheet({
                       : "entrou pelo link"}
                 </span>
               </div>
-              <span className="role">{m.role === "owner" ? "dona" : "pode editar"}</span>
+              {souDona && m.role !== "owner" && m.id !== meId ? (
+                <button
+                  type="button"
+                  className={`remover${armado === m.id ? " is-armado" : ""}`}
+                  onClick={() => pedirRemocao(m.id)}
+                  aria-label={`Remover ${m.display_name} da lista`}
+                >
+                  {armado === m.id ? "confirmar" : "remover"}
+                </button>
+              ) : (
+                <span className="role">{m.role === "owner" ? "dona" : "pode editar"}</span>
+              )}
             </div>
           ))}
         </div>

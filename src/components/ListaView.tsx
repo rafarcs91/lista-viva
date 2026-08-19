@@ -628,6 +628,27 @@ export default function ListaView({
     qtyTimers.current.set(item.id, timer);
   }
 
+  /**
+   * Só a dona chega aqui — a política de RLS é quem garante isso de fato,
+   * a interface apenas não oferece o botão para os demais.
+   */
+  async function removerMembro(userId: string) {
+    const antes = members;
+    setMembers((m) => m.filter((x) => x.id !== userId));
+    setError("");
+
+    const { error: err } = await supabase
+      .from("list_members")
+      .delete()
+      .eq("list_id", list.id)
+      .eq("user_id", userId);
+
+    if (err) {
+      setMembers(antes);
+      setError("Não consegui remover essa pessoa.");
+    }
+  }
+
   async function renameItem(item: Item, novoNome: string) {
     const anterior = item.name;
 
@@ -947,8 +968,10 @@ export default function ListaView({
           listId={list.id}
           members={members}
           meId={me.id}
+          souDona={list.owner_id === me.id}
           online={online}
           onClose={() => setSharing(false)}
+          onRemover={removerMembro}
         />
       )}
 
