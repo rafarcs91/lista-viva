@@ -143,7 +143,7 @@ algo como `ola@seudominio.com.br`.
 
 ## Testes de regressão
 
-64 casos, verdes contra um Supabase real em ~35 s.
+73 casos, verdes contra um Supabase real em ~35 s.
 
 ```bash
 npm test          # roda a suíte uma vez
@@ -165,6 +165,7 @@ testadas com mock — o mock passaria mesmo com a política errada.
 | `tests/erros-auth.test.ts` | Tradução das mensagens de login. Função pura: roda sem banco nem credencial. |
 | `tests/fila-offline.test.ts` | Coalescência e projeção da fila offline. Também sem banco. |
 | `tests/fila-reenvio.test.ts` | A tradução de cada operação da fila na escrita correspondente, contra o banco. |
+| `tests/service-worker.test.ts` | Que o SW não guarda HTML autenticado nem intercepta o Supabase. Sem banco. |
 
 ### Por que estes testes existem
 
@@ -228,6 +229,7 @@ tests/
   erros-auth.test.ts          Tradução dos erros (puro, sem rede)
   fila-offline.test.ts        Coalescência da fila (puro, sem rede)
   fila-reenvio.test.ts        Reenvio da fila contra o banco
+  service-worker.test.ts      Regras do SW (puro, sem rede)
 src/
   proxy.ts                    Renova a sessão e protege as rotas
   app/
@@ -315,4 +317,5 @@ elas mostraram de não-óbvio:
 - Editar o nome do item (a infra de `updated_by` e diff já cobre)
 - Agrupar por categoria com detecção pelo nome do item
 - Sugestões a partir do histórico de compras
-- PWA instalável
+- Ver a lista offline na primeira abertura (hoje o SW guarda só a casca;
+  mostrar os dados exigiria renderizar a lista no cliente)

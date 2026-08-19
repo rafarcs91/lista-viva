@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import RegistrarServiceWorker from "@/components/RegistrarServiceWorker";
 
 export const metadata: Metadata = {
   title: "Lista Viva",
@@ -19,7 +20,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        {children}
+        <RegistrarServiceWorker />
+      </body>
     </html>
   );
 }

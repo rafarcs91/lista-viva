@@ -1,7 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/entrar", "/auth"];
+// /offline e /sw.js precisam responder sem sessão: são justamente o que
+// aparece quando não há rede para validar sessão nenhuma.
+const PUBLIC_PATHS = ["/entrar", "/auth", "/offline"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -62,6 +64,6 @@ export async function proxy(request: NextRequest) {
  */
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|sw.js|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|webp|ico)$).*)",
   ],
 };
