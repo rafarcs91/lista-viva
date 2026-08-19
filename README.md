@@ -143,7 +143,7 @@ algo como `ola@seudominio.com.br`.
 
 ## Testes de regressão
 
-27 casos, verdes contra um Supabase real em ~25 s.
+38 casos, verdes contra um Supabase real em ~25 s.
 
 ```bash
 npm test          # roda a suíte uma vez
@@ -162,6 +162,7 @@ testadas com mock — o mock passaria mesmo com a política errada.
 | `tests/convite.test.ts` | Token do convite, acesso concedido, entrada repetida sem duplicar, saída revogando acesso. |
 | `tests/realtime.test.ts` | Os dois ajustes de banco mais fáceis de perder numa migração (ver abaixo). |
 | `tests/seguranca.test.ts` | Que os testes não conseguem apagar dados que não criaram. |
+| `tests/erros-auth.test.ts` | Tradução das mensagens de login. Função pura: roda sem banco nem credencial. |
 
 ### Por que estes testes existem
 
@@ -222,6 +223,7 @@ tests/
   convite.test.ts             Token, acesso, saída
   realtime.test.ts            Eventos, payload.old, DELETE filtrado
   seguranca.test.ts           Trava contra apagar dado real
+  erros-auth.test.ts          Tradução dos erros (puro, sem rede)
 src/
   proxy.ts                    Renova a sessão e protege as rotas
   app/

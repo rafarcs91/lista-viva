@@ -1,8 +1,13 @@
 import EntrarForm from "@/components/EntrarForm";
+import { erroDaUrl } from "@/lib/erros-auth";
 
 export default async function EntrarPage({ searchParams }: PageProps<"/entrar">) {
-  const { proximo } = await searchParams;
+  const { proximo, erro } = await searchParams;
   const next = typeof proximo === "string" ? proximo : "/listas";
+  // O callback do link mágico sinaliza a falha por aqui. Sem ler este
+  // parâmetro, quem clica num link vencido volta à tela de login sem
+  // nenhuma pista do que aconteceu.
+  const aviso = erroDaUrl(typeof erro === "string" ? erro : undefined);
 
   return (
     <div className="shell">
@@ -36,7 +41,7 @@ export default async function EntrarPage({ searchParams }: PageProps<"/entrar">)
           </p>
         </div>
 
-        <EntrarForm next={next} />
+        <EntrarForm next={next} erroInicial={aviso} />
       </div>
     </div>
   );
