@@ -70,11 +70,11 @@ function carregarSW() {
 async function pedir(
   sw: ReturnType<typeof carregarSW>,
   req: { url: string; method?: string; mode?: string },
-) {
-  let resposta: Promise<unknown> | null = null;
+): Promise<Response | null> {
+  let resposta: Promise<Response> | undefined;
   sw.handlers.fetch?.({
     request: { method: "GET", mode: "no-cors", ...req },
-    respondWith: (p: Promise<unknown>) => {
+    respondWith: (p: Promise<Response>) => {
       resposta = p;
     },
   });
@@ -147,23 +147,17 @@ describe("o que ele faz", () => {
     sw.guardados.set("/offline", new Response("pagina offline"));
     sw.fetchFalso.mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
-    const r = (await pedir(sw, {
-      url: `${ORIGEM}/listas`,
-      mode: "navigate",
-    })) as Response;
+    const r = await pedir(sw, { url: `${ORIGEM}/listas`, mode: "navigate" });
 
-    expect(await r.text()).toBe("pagina offline");
+    expect(await r!.text()).toBe("pagina offline");
   });
 
   test("sem rede e sem página offline guardada, responde 503 legível", async () => {
     sw.fetchFalso.mockRejectedValueOnce(new TypeError("Failed to fetch"));
 
-    const r = (await pedir(sw, {
-      url: `${ORIGEM}/listas`,
-      mode: "navigate",
-    })) as Response;
+    const r = await pedir(sw, { url: `${ORIGEM}/listas`, mode: "navigate" });
 
-    expect(r.status).toBe(503);
+    expect(r!.status).toBe(503);
   });
 });
 
