@@ -141,9 +141,72 @@ Para publicar de verdade, registre um domínio, verifique-o no Resend
 (**Domains** → adicionar → 3 registros DNS) e troque o *Sender email* para
 algo como `ola@seudominio.com.br`.
 
+## Testes de regressão
+
+```bash
+npm test          # roda a suíte uma vez
+npm run test:watch
+```
+
+A suíte fala com um Supabase de verdade, porque é exatamente isso que ela
+protege: políticas de RLS e configuração de Realtime não têm como ser
+testadas com mock — o mock passaria mesmo com a política errada.
+
+### O que ela cobre
+
+| Arquivo | Protege |
+|---|---|
+| `tests/rls.test.ts` | Isolamento entre pessoas: quem não é membro não lê, não escreve, não vê perfis. Triggers de perfil e de dona. Cascade. |
+| `tests/convite.test.ts` | Token do convite, acesso concedido, entrada repetida sem duplicar, saída revogando acesso. |
+| `tests/realtime.test.ts` | Os dois ajustes de banco mais fáceis de perder numa migração (ver abaixo). |
+
+### Por que estes testes existem
+
+Dois achados da verificação inicial motivaram a suíte, porque quebram **em
+silêncio** — sem erro de build, sem exceção, sem log:
+
+- **`replica identity full` na tabela `items`.** Se sair, o payload de
+  DELETE passa a trazer só a chave primária, o filtro `list_id=eq.…` nunca
+  casa, e exclusões feitas por outra pessoa somem da tela de quem está
+  junto. O mesmo ajuste é o que faz o UPDATE trazer a linha antiga, base
+  para a interface dizer *o que* mudou.
+- **`updated_by` em `items`.** Sem ele, uma mudança de quantidade seria
+  creditada a quem marcou o item por último, e a linha de atividade
+  passaria a mentir.
+
+Um `using (true)` colado por engano numa política também não quebra build
+nem lint — só remove o isolamento entre famílias diferentes.
+
+### Configurar
+
+Os testes **criam e apagam** listas, itens e associações. Por isso as
+variáveis têm nomes próprios (`TEST_*`) e não herdam nada do `.env.local`:
+apontar o alvo precisa ser uma decisão consciente. Sem `.env.test`, a suíte
+recusa rodar em vez de adivinhar.
+
+**Use um projeto Supabase separado para testes.** Rodar contra produção
+funciona — os testes só tocam dados que eles mesmos criam, prefixados com
+`[teste]`, e limpam no final — mas um teste mal escrito no futuro não teria
+essa disciplina.
+
+1. Crie o projeto de teste e rode `supabase/schema.sql` nele.
+2. Em **Authentication → Users → Add user**, crie três contas com
+   **Auto Confirm User** marcado. Podem compartilhar a senha.
+3. `cp .env.test.example .env.test` e preencha.
+
+No CI, os mesmos valores vão como *secrets* do repositório. Se não
+existirem, o job de regressão é pulado em vez de falhar — assim um fork
+continua verde.
+
 ## Como está organizado
 
 ```
+tests/
+  setup.ts                    Trava: sem .env.test, nada roda
+  helpers.ts                  Sessões por pessoa, fixtures, inscrição em canal
+  rls.test.ts                 Isolamento entre pessoas
+  convite.test.ts             Token, acesso, saída
+  realtime.test.ts            Eventos, payload.old, DELETE filtrado
 src/
   proxy.ts                    Renova a sessão e protege as rotas
   app/

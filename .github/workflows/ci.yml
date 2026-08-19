@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  # Roda sempre: não depende de banco nem de segredo nenhum.
+  qualidade:
+    name: Lint, tipos e build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm run build
+        env:
+          # O build só precisa que as variáveis existam; nenhuma chamada
+          # ao banco acontece ao compilar.
+          NEXT_PUBLIC_SUPABASE_URL: https://exemplo.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: chave-de-build
+
+  # Só roda quando o repositório tem os segredos configurados. Sem eles o
+  # job é pulado em vez de falhar — assim um fork continua verde.
+  regressao:
+    name: Testes de regressão (Supabase real)
+    runs-on: ubuntu-latest
+    needs: qualidade
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Verificar se os segredos existem
+        id: check
+        run: |
+          if [ -n "${{ secrets.TEST_SUPABASE_URL }}" ]; then
+            echo "configurado=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configurado=false" >> "$GITHUB_OUTPUT"
+            echo "Segredos de teste ausentes — pulando. Veja o README."
+          fi
+
+      - name: Rodar a suíte
+        if: steps.check.outputs.configurado == 'true'
+        run: npm test
+        env:
+          TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+          TEST_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
+          TEST_USER_A_EMAIL: ${{ secrets.TEST_USER_A_EMAIL }}
+          TEST_USER_A_PASSWORD: ${{ secrets.TEST_USER_A_PASSWORD }}
+          TEST_USER_B_EMAIL: ${{ secrets.TEST_USER_B_EMAIL }}
+          TEST_USER_B_PASSWORD: ${{ secrets.TEST_USER_B_PASSWORD }}
+          TEST_USER_C_EMAIL: ${{ secrets.TEST_USER_C_EMAIL }}
+          TEST_USER_C_PASSWORD: ${{ secrets.TEST_USER_C_PASSWORD }}
