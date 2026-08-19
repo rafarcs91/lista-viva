@@ -1223,3 +1223,38 @@ input {
   line-height: 1.55;
   color: var(--ink-2);
 }
+
+/* ═══════════════ NOME EDITÁVEL ═══════════════ */
+/* O nome é um botão, mas não deve parecer um: nada de fundo nem borda em
+   repouso. O convite ao toque aparece só no hover, para não poluir uma
+   lista com vinte itens. */
+
+button.item-name {
+  border: 0;
+  padding: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  cursor: text;
+}
+button.item-name:hover:not(:disabled) {
+  color: var(--mint-ink);
+}
+button.item-name:disabled {
+  cursor: default;
+}
+
+.item-name-input {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  outline: none;
+  /* Sem o reset do gradiente, o risco do item concluído apareceria
+     atravessando o campo de edição. */
+  background-image: none;
+  caret-color: var(--mint);
+}
+.item-name-input::selection {
+  background: var(--mint-soft);
+}

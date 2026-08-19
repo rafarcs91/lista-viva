@@ -37,7 +37,8 @@ function describeChange(
     return `${fresh.done ? "marcou" : "desmarcou"} ${fresh.name}`;
   if (previous.qty !== fresh.qty)
     return `mudou ${fresh.name} para ${fresh.qty} un`;
-  if (previous.name !== fresh.name) return `renomeou para ${fresh.name}`;
+  if (previous.name !== fresh.name)
+    return `renomeou ${previous.name} para ${fresh.name}`;
   return null;
 }
 
@@ -410,6 +411,30 @@ export default function ListaView({
     qtyTimers.current.set(item.id, timer);
   }
 
+  async function renameItem(item: Item, novoNome: string) {
+    const anterior = item.name;
+
+    setItems((l) =>
+      l.map((i) => (i.id === item.id ? { ...i, name: novoNome } : i)),
+    );
+    markPending(item.id, true);
+    setError("");
+
+    const { error: err } = await supabase
+      .from("items")
+      .update({ name: novoNome, updated_by: me.id })
+      .eq("id", item.id);
+
+    markPending(item.id, false);
+
+    if (err) {
+      setItems((l) =>
+        l.map((i) => (i.id === item.id ? { ...i, name: anterior } : i)),
+      );
+      setError("Não consegui renomear o item.");
+    }
+  }
+
   async function deleteItem(item: Item) {
     setItems((l) => l.filter((i) => i.id !== item.id));
     setError("");
@@ -558,6 +583,7 @@ export default function ListaView({
                 onToggle={() => toggleItem(item)}
                 onDelete={() => deleteItem(item)}
                 onQty={(next) => changeQty(item, next)}
+                onRename={(nome) => renameItem(item, nome)}
               />
             ))}
           </ul>
@@ -585,6 +611,7 @@ export default function ListaView({
                     onToggle={() => toggleItem(item)}
                     onDelete={() => deleteItem(item)}
                     onQty={(next) => changeQty(item, next)}
+                    onRename={(nome) => renameItem(item, nome)}
                   />
                 ))}
               </ul>

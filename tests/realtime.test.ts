@@ -131,6 +131,30 @@ describe("sincronização em tempo real", () => {
     expect(evento?.new?.added_by).toBe(leo.id);
   });
 
+  test("renomear um item chega para quem está junto", async () => {
+    // Nomes propositalmente distintos do item criado no beforeAll: buscar
+    // por um nome que já existe na lista faz o find casar com o evento
+    // errado e o teste acusa falha onde não há.
+    const item = await adicionarItem(ana, listaId, "Café moído", 1);
+    await esperar(2000);
+
+    await leo.sb
+      .from("items")
+      .update({ name: "Café em grãos", updated_by: leo.id })
+      .eq("id", item.id);
+    await esperar(2500);
+
+    const evento = eventos.find(
+      (e) => e.eventType === "UPDATE" && e.new?.name === "Café em grãos",
+    );
+
+    expect(evento).toBeDefined();
+    // O nome antigo vem no payload.old — é o que permite a linha de
+    // atividade dizer "renomeou X para Y" em vez de só "renomeou para Y".
+    expect(evento?.old?.name).toBe("Café moído");
+    expect(evento?.new?.updated_by).toBe(leo.id);
+  });
+
   test("excluir chega apesar do filtro por list_id", async () => {
     await leo.sb.from("items").delete().eq("id", itemId);
     await esperar(2500);

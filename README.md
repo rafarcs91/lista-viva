@@ -143,7 +143,7 @@ algo como `ola@seudominio.com.br`.
 
 ## Testes de regressão
 
-38 casos, verdes contra um Supabase real em ~25 s.
+40 casos, verdes contra um Supabase real em ~30 s.
 
 ```bash
 npm test          # roda a suíte uma vez
@@ -294,6 +294,9 @@ elas mostraram de não-óbvio:
   de *Desfazer*. Confirmação pune quem tem certeza; desfazer salva quem errou.
 - **O comprado sai do caminho.** "No carrinho" nasce fechado — item concluído
   virou histórico.
+- **Nome e quantidade se editam no lugar.** Tocar em qualquer um dos dois
+  troca o texto por um campo na mesma posição — nada de tela de detalhe.
+  Só itens pendentes: o que já está no carrinho virou histórico.
 - **Quantidade se edita no lugar.** Tocar no número troca o chip por um
   stepper na mesma posição; o item não abre tela nem diálogo. A escrita é
   adiada 450 ms, então quatro toques em "+" viram um `UPDATE`, e quem está

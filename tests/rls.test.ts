@@ -99,6 +99,28 @@ describe("isolamento entre pessoas (RLS)", () => {
     expect(error).not.toBeNull();
   });
 
+  test("quem não é membro não consegue renomear item", async () => {
+    const { data: item } = await dona.sb
+      .from("items")
+      .select("id, name")
+      .eq("list_id", listaId)
+      .limit(1)
+      .single();
+
+    await estranha.sb
+      .from("items")
+      .update({ name: "sequestrado", updated_by: estranha.id })
+      .eq("id", item!.id);
+
+    const { data: depois } = await dona.sb
+      .from("items")
+      .select("name")
+      .eq("id", item!.id)
+      .maybeSingle();
+
+    expect(depois?.name).toBe(item!.name);
+  });
+
   test("quem não divide lista não enxerga o perfil alheio", async () => {
     const { data } = await estranha.sb
       .from("profiles")

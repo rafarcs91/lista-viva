@@ -22,6 +22,7 @@ export default function ItemRow({
   onToggle,
   onDelete,
   onQty,
+  onRename,
 }: {
   item: Item;
   actor?: Profile;
@@ -31,12 +32,15 @@ export default function ItemRow({
   onToggle: () => void;
   onDelete: () => void;
   onQty: (next: number) => void;
+  onRename: (nome: string) => void;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const qtyRef = useRef<HTMLDivElement>(null);
   const drag = useRef({ startX: 0, dx: 0, active: false });
   const [dragging, setDragging] = useState(false);
   const [editingQty, setEditingQty] = useState(false);
+  const [editandoNome, setEditandoNome] = useState(false);
+  const [rascunho, setRascunho] = useState(item.name);
 
   // Fecha o seletor ao tocar em qualquer outro lugar — sem botão de "pronto".
   useEffect(() => {
@@ -50,7 +54,7 @@ export default function ItemRow({
 
   function onPointerDown(e: React.PointerEvent) {
     // O check e o seletor de quantidade não podem virar arrasto.
-    if ((e.target as HTMLElement).closest(".check, .qty")) return;
+    if ((e.target as HTMLElement).closest(".check, .qty, .item-name")) return;
     drag.current = { startX: e.clientX, dx: 0, active: true };
     setDragging(true);
     cardRef.current?.setPointerCapture(e.pointerId);
@@ -73,6 +77,21 @@ export default function ItemRow({
     } else {
       cardRef.current.style.transform = "";
     }
+  }
+
+  /**
+   * Nome vazio significa desistência, não apagar o item — quem quer remover
+   * arrasta o cartão. Nome igual não gera escrita nenhuma.
+   */
+  function confirmarNome() {
+    const limpo = rascunho.trim();
+    setEditandoNome(false);
+
+    if (!limpo || limpo === item.name) {
+      setRascunho(item.name);
+      return;
+    }
+    onRename(limpo);
   }
 
   const actorName = isMe ? "você" : (actor?.display_name ?? "alguém");
@@ -123,7 +142,40 @@ export default function ItemRow({
         </button>
 
         <div className="item-body">
-          <span className="item-name">{item.name}</span>
+          {editandoNome ? (
+            <input
+              className="item-name item-name-input"
+              value={rascunho}
+              autoFocus
+              maxLength={120}
+              aria-label={`Nome do item, atualmente ${item.name}`}
+              onChange={(e) => setRascunho(e.target.value)}
+              onBlur={confirmarNome}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  confirmarNome();
+                }
+                if (e.key === "Escape") {
+                  setRascunho(item.name);
+                  setEditandoNome(false);
+                }
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="item-name"
+              disabled={item.done}
+              aria-label={`${item.name}. Tocar para renomear`}
+              onClick={() => {
+                setRascunho(item.name);
+                setEditandoNome(true);
+              }}
+            >
+              {item.name}
+            </button>
+          )}
           <span className="item-meta">
             {item.done ? "no carrinho · " : "adicionado por "}
             <span className="who" data-color={actorColor}>
