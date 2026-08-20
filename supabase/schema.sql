@@ -395,3 +395,82 @@ as $$
   order by count(*) desc, max(i.created_at) desc
   limit greatest(1, least(p_limit, 30));
 $$;
+
+-- ── Um item, uma linha ─────────────────────────────────────────
+-- Adicionar algo que já está na lista deve somar a quantidade, nunca criar
+-- uma segunda linha com o mesmo nome.
+--
+-- A checagem no aplicativo não basta: duas pessoas adicionando "Leite" ao
+-- mesmo tempo não enxergam o item uma da outra, ambas inserem, e a
+-- duplicata volta. Só uma restrição no banco fecha essa corrida.
+
+-- Primeiro fundir o que já está duplicado — o índice único falharia com
+-- essas linhas presentes. A quantidade é somada e a linha mais antiga
+-- sobrevive; o resultado só continua marcado se todas as cópias estavam.
+do $$
+declare
+  g record;
+  v_manter uuid;
+begin
+  for g in
+    select list_id,
+           lower(trim(name)) as chave,
+           sum(qty) as soma,
+           bool_and(done) as todas_marcadas
+      from public.items
+     group by list_id, lower(trim(name))
+    having count(*) > 1
+  loop
+    select id into v_manter
+      from public.items
+     where list_id = g.list_id and lower(trim(name)) = g.chave
+     order by created_at, id
+     limit 1;
+
+    update public.items
+       set qty = least(g.soma, 999),
+           done = g.todas_marcadas,
+           checked_by = case when g.todas_marcadas then checked_by else null end
+     where id = v_manter;
+
+    delete from public.items
+     where list_id = g.list_id
+       and lower(trim(name)) = g.chave
+       and id <> v_manter;
+  end loop;
+end;
+$$;
+
+create unique index if not exists items_lista_nome_uniq
+  on public.items (list_id, lower(trim(name)));
+
+/**
+ * Insere o item ou soma na linha que já existe, numa operação só.
+ *
+ * SECURITY INVOKER: o RLS de `items` continua valendo, então ninguém
+ * acrescenta item em lista de que não participa.
+ *
+ * Ao somar, o item volta a ficar pendente: quem adiciona de novo algo que
+ * já está no carrinho está dizendo que precisa comprar mais.
+ */
+create or replace function public.add_or_bump_item(
+  p_list uuid,
+  p_name text,
+  p_qty integer default 1
+)
+returns public.items
+language sql
+security invoker
+volatile
+set search_path = public
+as $$
+  insert into public.items (list_id, name, qty, done, added_by, updated_by)
+  values (p_list, trim(p_name), greatest(1, least(p_qty, 999)), false, auth.uid(), auth.uid())
+  on conflict (list_id, (lower(trim(name))))
+  do update
+     set qty = least(public.items.qty + excluded.qty, 999),
+         done = false,
+         checked_by = null,
+         updated_by = auth.uid()
+  returning *;
+$$;

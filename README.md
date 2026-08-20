@@ -159,7 +159,7 @@ algo como `ola@seudominio.com.br`.
 
 ## Testes de regressão
 
-90 casos, verdes contra um Supabase real em ~55 s.
+99 casos, verdes contra um Supabase real em ~60 s.
 
 ```bash
 npm test          # roda a suíte uma vez
@@ -183,6 +183,7 @@ testadas com mock — o mock passaria mesmo com a política errada.
 | `tests/fila-reenvio.test.ts` | A tradução de cada operação da fila na escrita correspondente, contra o banco. |
 | `tests/service-worker.test.ts` | Que o SW não guarda HTML autenticado nem intercepta o Supabase. Sem banco. |
 | `tests/sugestoes.test.ts` | Sugestões pelo histórico — inclusive que elas não vazam itens de listas alheias. |
+| `tests/itens-unicos.test.ts` | Um item, uma linha — inclusive com duas pessoas adicionando ao mesmo tempo. |
 
 ### Por que estes testes existem
 
@@ -248,6 +249,7 @@ tests/
   fila-reenvio.test.ts        Reenvio da fila contra o banco
   service-worker.test.ts      Regras do SW (puro, sem rede)
   sugestoes.test.ts           Sugestões e o que elas não podem vazar
+  itens-unicos.test.ts        Fusão por nome, inclusive sob corrida
 scripts/
   db-push.mjs                 Aplica o schema.sql no banco
 src/
@@ -336,6 +338,11 @@ elas mostraram de não-óbvio:
   de *Desfazer*. Confirmação pune quem tem certeza; desfazer salva quem errou.
 - **O comprado sai do caminho.** "No carrinho" nasce fechado — item concluído
   virou histórico.
+- **Um item, uma linha.** Adicionar algo que já está na lista soma a
+  quantidade em vez de criar uma linha repetida, e devolve o item para os
+  pendentes se ele estava no carrinho — quem adiciona de novo precisa
+  comprar mais. A tela rola até o item e destaca, senão a fusão pareceria
+  um toque que não fez nada.
 - **Nome e quantidade se editam no lugar.** Tocar em qualquer um dos dois
   troca o texto por um campo na mesma posição — nada de tela de detalhe.
   Só itens pendentes: o que já está no carrinho virou histórico.

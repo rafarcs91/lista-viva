@@ -31,6 +31,9 @@ type Toast = {
 };
 
 const REMOTE_FLASH_MS = 2100;
+
+/** Mesma normalização do índice único no banco, para os dois concordarem. */
+const chaveDoNome = (nome: string) => nome.trim().toLowerCase();
 const QTY_COMMIT_MS = 450;
 
 /**
@@ -509,13 +512,78 @@ export default function ListaView({
     const name = draft.trim();
     if (!name) return;
 
+    const quantidade = qty;
+    setDraft("");
+    setQty(1);
+    setError("");
+
+    // Se o nome já está na lista, adicionar significa precisar de mais —
+    // não de uma segunda linha igual. O banco garante o mesmo por índice
+    // único; aqui é só para a tela responder na hora.
+    const existente = items.find(
+      (i) => chaveDoNome(i.name) === chaveDoNome(name),
+    );
+
+    if (existente) {
+      const somada = Math.min(existente.qty + quantidade, 999);
+
+      setItems((l) =>
+        l.map((i) =>
+          i.id === existente.id
+            ? { ...i, qty: somada, done: false, checked_by: null }
+            : i,
+        ),
+      );
+
+      // Sem isto a fusão pareceria um bug: a linha alterada pode estar
+      // fora da tela, e o campo simplesmente esvaziaria sem nada aparecer.
+      flashRemote(existente.id, me.color);
+      pushToast({
+        text: `${existente.name}: ${existente.qty} → ${somada} un`,
+        actor: me,
+      });
+      window.setTimeout(() => {
+        document
+          .querySelector(`.item[data-id="${existente.id}"]`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
+
+      if (ehTemporario(existente.id)) {
+        anotar({
+          tipo: "atualizar",
+          id: existente.id,
+          campos: { qty: somada, done: false },
+        });
+        return;
+      }
+
+      const { error: err } = await supabase
+        .from("items")
+        .update({ qty: somada, done: false, checked_by: null, updated_by: me.id })
+        .eq("id", existente.id);
+
+      if (err && ehFalhaDeRede(err)) {
+        anotar({
+          tipo: "atualizar",
+          id: existente.id,
+          campos: { qty: somada, done: false },
+        });
+        return;
+      }
+      if (err) {
+        setItems((l) => l.map((i) => (i.id === existente.id ? existente : i)));
+        setError("Não consegui somar a quantidade.");
+      }
+      return;
+    }
+
     const tempId = `tmp-${crypto.randomUUID()}`;
     const now = new Date().toISOString();
     const optimistic: Item = {
       id: tempId,
       list_id: list.id,
       name,
-      qty,
+      qty: quantidade,
       done: false,
       added_by: me.id,
       checked_by: null,
@@ -526,21 +594,21 @@ export default function ListaView({
 
     setItems((l) => [...l, optimistic]);
     markPending(tempId, true);
-    setDraft("");
-    setQty(1);
-    setError("");
 
+    // add_or_bump_item resolve a corrida: se outra pessoa inseriu o mesmo
+    // nome no intervalo, o banco soma em vez de recusar por duplicidade.
     const { data, error: err } = await supabase
-      .from("items")
-      .insert({ list_id: list.id, name, qty, added_by: me.id })
-      .select("*")
+      .rpc("add_or_bump_item", { p_list: list.id, p_name: name, p_qty: quantidade })
       .single<Item>();
 
     markPending(tempId, false);
 
     if (err && ehFalhaDeRede(err)) {
-      // O item fica na tela com o id provisório e vai para a fila.
-      anotar({ tipo: "criar", id: tempId, campos: { name, qty, done: false } });
+      anotar({
+        tipo: "criar",
+        id: tempId,
+        campos: { name, qty: quantidade, done: false },
+      });
       return;
     }
 
@@ -550,10 +618,13 @@ export default function ListaView({
       return;
     }
 
-    // Troca o provisório pelo real, sem duplicar se o realtime chegou antes.
     setItems((l) => {
-      const withoutTemp = l.filter((i) => i.id !== tempId);
-      return withoutTemp.some((i) => i.id === data.id) ? withoutTemp : [...withoutTemp, data];
+      const semTemp = l.filter((i) => i.id !== tempId);
+      const idx = semTemp.findIndex((i) => i.id === data.id);
+      if (idx === -1) return [...semTemp, data];
+      const proxima = [...semTemp];
+      proxima[idx] = data;
+      return proxima;
     });
   }
 
@@ -702,7 +773,13 @@ export default function ListaView({
       setItems((l) =>
         l.map((i) => (i.id === item.id ? { ...i, name: anterior } : i)),
       );
-      setError("Não consegui renomear o item.");
+      // 23505 = violação do índice único por lista e nome. Fundir os dois
+      // itens porque alguém digitou um nome seria surpreendente demais.
+      setError(
+        err.code === "23505"
+          ? `Já existe "${novoNome}" nesta lista.`
+          : "Não consegui renomear o item.",
+      );
     }
   }
 
