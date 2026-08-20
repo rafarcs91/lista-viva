@@ -44,8 +44,24 @@ Anote a senha do banco (você não vai precisar dela aqui, mas guarde).
 
 ### 2. Rodar o schema
 
-No painel do projeto, abra **SQL Editor** → **New query**, cole o conteúdo
-inteiro de [`supabase/schema.sql`](supabase/schema.sql) e execute.
+Na primeira vez, no painel do projeto: **SQL Editor** → **New query**, cole o
+conteúdo inteiro de [`supabase/schema.sql`](supabase/schema.sql) e execute.
+
+Depois disso, prefira o comando:
+
+```bash
+npm run db:push
+```
+
+Ele aplica o arquivo inteiro e lista as funções criadas, para confirmar que
+tudo entrou. Precisa de um `.env.db.local` (fora do git) com
+`SUPABASE_DB_REF`, `SUPABASE_DB_PASSWORD` e `SUPABASE_DB_REGION` — pegue em
+**Settings → Database**. Essa credencial é só para migração; o app usa a
+chave anon, sob RLS.
+
+> Existe porque colar um arquivo de trezentas linhas no editor já falhou
+> uma vez: a seleção não pegou até o fim, a última função não foi criada, e
+> o erro só apareceu no teste.
 
 Isso cria as cinco tabelas, as políticas de RLS, os triggers e liga o
 Realtime na tabela `items`. O arquivo é idempotente — pode rodar de novo
@@ -143,7 +159,7 @@ algo como `ola@seudominio.com.br`.
 
 ## Testes de regressão
 
-84 casos, verdes contra um Supabase real em ~50 s.
+90 casos, verdes contra um Supabase real em ~55 s.
 
 ```bash
 npm test          # roda a suíte uma vez
@@ -166,6 +182,7 @@ testadas com mock — o mock passaria mesmo com a política errada.
 | `tests/fila-offline.test.ts` | Coalescência e projeção da fila offline. Também sem banco. |
 | `tests/fila-reenvio.test.ts` | A tradução de cada operação da fila na escrita correspondente, contra o banco. |
 | `tests/service-worker.test.ts` | Que o SW não guarda HTML autenticado nem intercepta o Supabase. Sem banco. |
+| `tests/sugestoes.test.ts` | Sugestões pelo histórico — inclusive que elas não vazam itens de listas alheias. |
 
 ### Por que estes testes existem
 
@@ -230,6 +247,9 @@ tests/
   fila-offline.test.ts        Coalescência da fila (puro, sem rede)
   fila-reenvio.test.ts        Reenvio da fila contra o banco
   service-worker.test.ts      Regras do SW (puro, sem rede)
+  sugestoes.test.ts           Sugestões e o que elas não podem vazar
+scripts/
+  db-push.mjs                 Aplica o schema.sql no banco
 src/
   proxy.ts                    Renova a sessão e protege as rotas
   app/
@@ -328,7 +348,6 @@ elas mostraram de não-óbvio:
 
 - Editar o nome do item (a infra de `updated_by` e diff já cobre)
 - Agrupar por categoria com detecção pelo nome do item
-- Sugestões a partir do histórico de compras
 - Transferir a propriedade da lista
 - Agrupar por categoria com detecção pelo nome do item
 - Ver a lista offline na primeira abertura (hoje o SW guarda só a casca;

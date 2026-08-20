@@ -83,6 +83,8 @@ export default function ListaView({
 
   const [draft, setDraft] = useState("");
   const [qty, setQty] = useState(1);
+  const [sugestoes, setSugestoes] = useState<string[]>([]);
+  const [compondo, setCompondo] = useState(false);
 
   const toastSeq = useRef(0);
   const flashTimers = useRef<Map<string, number>>(new Map());
@@ -268,6 +270,21 @@ export default function ListaView({
       window.clearInterval(relogio);
     };
   }, [sincronizar]);
+
+  /* ─────────── sugestões pelo histórico ─────────── */
+
+  /**
+   * Busca só quando a barra de composição ganha foco: é o único momento em
+   * que a sugestão serve, e evita uma consulta em toda abertura de lista.
+   */
+  const buscarSugestoes = useCallback(async () => {
+    const { data } = await supabase.rpc("item_suggestions", {
+      p_list: list.id,
+      p_limit: 12,
+    });
+    const linhas = (data ?? []) as { name: string }[];
+    setSugestoes(linhas.map((linha) => linha.name));
+  }, [supabase, list.id]);
 
   /* ─────────── reconciliação ─────────── */
 
@@ -540,6 +557,11 @@ export default function ListaView({
     });
   }
 
+  function usarSugestao(nome: string) {
+    setDraft(nome);
+    setSugestoes((s) => s.filter((x) => x !== nome));
+  }
+
   async function toggleItem(item: Item) {
     const before = item.done;
     const next = !before;
@@ -735,6 +757,15 @@ export default function ListaView({
 
   /* ─────────── render ─────────── */
 
+  // Filtra conforme se digita: com poucas listas a sugestão bruta é curta,
+  // e é digitando que ela vira atalho de verdade.
+  const busca = draft.trim().toLowerCase();
+  const naLista = new Set(items.map((i) => i.name.trim().toLowerCase()));
+  const sugestoesVisiveis = sugestoes
+    .filter((nome) => !naLista.has(nome.trim().toLowerCase()))
+    .filter((nome) => (busca ? nome.toLowerCase().includes(busca) : true))
+    .slice(0, 8);
+
   const naFila = idsPendentes(fila);
   const aguardando = (id: string) => pending.has(id) || naFila.has(id);
 
@@ -909,6 +940,25 @@ export default function ListaView({
         ))}
       </div>
 
+      {compondo && sugestoesVisiveis.length > 0 && (
+        <div className="sugestoes" role="group" aria-label="Itens que você já comprou">
+          {sugestoesVisiveis.map((nome) => (
+            <button
+              key={nome}
+              type="button"
+              // onMouseDown em vez de onClick: o clique dispara depois do
+              // blur do campo, que já teria escondido a linha de sugestões.
+              onMouseDown={(e) => {
+                e.preventDefault();
+                usarSugestao(nome);
+              }}
+            >
+              {nome}
+            </button>
+          ))}
+        </div>
+      )}
+
       {fila.length > 0 && (
         <div className={`sync-bar${semRede ? " is-offline" : ""}`} role="status">
           <span className="sync-dot" />
@@ -937,6 +987,11 @@ export default function ListaView({
             maxLength={120}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onFocus={() => {
+              setCompondo(true);
+              void buscarSugestoes();
+            }}
+            onBlur={() => setCompondo(false)}
           />
           <div className="qty-step">
             <button

@@ -365,3 +365,33 @@ begin
   return v_convite.list_id;
 end;
 $$;
+
+-- ── Sugestões pelo histórico ───────────────────────────────────
+-- O que a pessoa já colocou nas listas dela, do mais frequente para o
+-- menos, tirando o que já está na lista aberta.
+--
+-- SECURITY INVOKER de propósito (é o padrão, explicitado aqui porque a
+-- escolha importa): a função roda com as permissões de quem chama, então o
+-- RLS de `items` continua valendo e ninguém recebe sugestão vinda da lista
+-- de outra família.
+
+create or replace function public.item_suggestions(
+  p_list uuid,
+  p_limit integer default 8
+)
+returns table (name text, vezes bigint)
+language sql
+security invoker
+stable
+set search_path = public
+as $$
+  select i.name, count(*) as vezes
+  from public.items i
+  where i.list_id <> p_list
+    and lower(trim(i.name)) not in (
+      select lower(trim(a.name)) from public.items a where a.list_id = p_list
+    )
+  group by i.name
+  order by count(*) desc, max(i.created_at) desc
+  limit greatest(1, least(p_limit, 30));
+$$;

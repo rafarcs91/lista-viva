@@ -1363,3 +1363,46 @@ button.item-name:disabled {
   opacity: 0.5;
   cursor: default;
 }
+
+/* ═══════════════ SUGESTÕES ═══════════════ */
+/* Uma linha só, rolando na horizontal: ocupar duas linhas empurraria a
+   lista para cima justo quando o teclado já roubou metade da tela. */
+
+.sugestoes {
+  position: sticky;
+  bottom: 76px;
+  z-index: 20;
+  display: flex;
+  gap: 7px;
+  padding: 0 18px 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  animation: itemIn 0.26s var(--ease-out);
+}
+.sugestoes::-webkit-scrollbar {
+  display: none;
+}
+
+.sugestoes button {
+  flex: none;
+  font-size: 13.5px;
+  font-weight: 550;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+  padding: 8px 14px;
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease),
+    background 0.18s var(--ease), transform 0.18s var(--ease);
+}
+.sugestoes button:hover {
+  color: var(--mint-ink);
+  border-color: var(--mint);
+  background: var(--mint-soft);
+}
+.sugestoes button:active {
+  transform: scale(0.95);
+}
